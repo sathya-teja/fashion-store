@@ -1,1 +1,28 @@
 @import "tailwindcss";
+
+
+
+/* 🌐 Global Theme Palette */
+@theme {
+  /* Brand Colors */
+  --color-primary: #1A2B4B;   /* Navy - main brand color */
+  --color-secondary: #4F46E5; /* Indigo - secondary brand */
+  --color-accent: #FF6F61;    /* Coral - call-to-action / highlights */
+
+  /* Neutral Colors (backgrounds, borders, text) */
+  --color-neutral-bg: #F9FAFB;  /* Page background */
+  --color-neutral-card: #FFFFFF; /* Card background */
+  --color-neutral-border: #E5E7EB; /* Borders */
+  --color-neutral-text: #111827; /* Main text */
+  --color-neutral-subtext: #6B7280; /* Muted/secondary text */
+
+  /* Status Colors */
+  --color-success: #10B981; /* Green */
+  --color-warning: #F59E0B; /* Amber */
+  --color-error: #EF4444;   /* Red */
+  --color-info: #3B82F6;    /* Blue */
+
+  /* Utility Shades */
+  --color-light: #F3F4F6;   /* Light gray sections */
+  --color-dark: #1F2937;    /* Dark gray (footer, alt nav) */
+}
