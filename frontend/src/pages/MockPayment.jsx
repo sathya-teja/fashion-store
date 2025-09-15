@@ -3,6 +3,8 @@ import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useCart } from "../context/CartContext";
 import axios from "axios";
+import { FaUser, FaCreditCard, FaCalendarAlt, FaLock } from "react-icons/fa";
+import { MdPayment } from "react-icons/md";
 
 const MockPayment = () => {
   const { state } = useLocation();
@@ -19,7 +21,11 @@ const MockPayment = () => {
   const [loading, setLoading] = useState(false);
 
   if (!totalAmount) {
-    return <p>No checkout data. Please go back to cart.</p>;
+    return (
+      <p className="text-center mt-20 text-gray-600">
+        No checkout data. Please go back to cart.
+      </p>
+    );
   }
 
   // ✅ validate mock payment form
@@ -67,10 +73,10 @@ const MockPayment = () => {
             {
               orderItems: cart.items.map((i) => ({
                 product: i.product._id,
-                quantity: i.quantity, // ✅ schema expects "quantity"
+                quantity: i.quantity,
               })),
               shippingAddress: {
-                fullName: shipping.fullName, // ✅ schema expects fullName
+                fullName: shipping.fullName,
                 address: shipping.address,
                 city: shipping.city,
                 postalCode: shipping.postalCode,
@@ -86,10 +92,8 @@ const MockPayment = () => {
             { headers: { Authorization: `Bearer ${userInfo.token}` } }
           );
 
-          // ✅ Clear cart after placing order
           clearCart();
 
-          // ✅ Redirect to confirmation page
           navigate("/order-confirmation", {
             state: {
               transactionId,
@@ -111,11 +115,25 @@ const MockPayment = () => {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-100">
-      <div className="bg-white shadow-lg rounded-lg p-8 w-full max-w-md">
-        <h2 className="text-2xl font-bold text-center mb-6">
-          💳 Secure Mock Payment
-        </h2>
+    <div className="min-h-screen flex justify-center items-center bg-gray-50 px-4">
+      <div className="bg-white shadow-xl rounded-xl p-6 w-full max-w-md">
+        {/* Header */}
+        <div className="flex flex-col items-center mb-6">
+          <MdPayment className="text-green-600 text-4xl mb-2" />
+          <h2 className="text-2xl font-bold text-gray-800">
+            Secure Payment
+          </h2>
+          <p className="text-gray-500 text-sm">
+            Complete your purchase safely
+          </p>
+        </div>
+
+        {/* Stepper */}
+        <div className="flex justify-between items-center mb-6 text-xs font-medium text-gray-600">
+          <span className="flex-1 text-center">🛒 Cart</span>
+          <span className="flex-1 text-center">🚚 Shipping</span>
+          <span className="flex-1 text-center text-green-600">💳 Payment</span>
+        </div>
 
         {error && (
           <div className="bg-red-100 text-red-700 p-2 rounded mb-4 text-sm">
@@ -123,48 +141,96 @@ const MockPayment = () => {
           </div>
         )}
 
+        {/* Payment Form */}
         <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Cardholder Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border rounded px-3 py-2"
-          />
-          <input
-            type="text"
-            placeholder="Card Number (16 digits)"
-            value={cardNumber}
-            onChange={(e) => setCardNumber(e.target.value)}
-            maxLength="16"
-            className="w-full border rounded px-3 py-2"
-          />
-          <div className="flex space-x-4">
+          <div className="relative">
+            <FaUser className="absolute left-3 top-3 text-gray-400" />
             <input
               type="text"
-              placeholder="MM/YY"
-              value={expiry}
-              onChange={(e) => setExpiry(e.target.value)}
-              maxLength="5"
-              className="w-1/2 border rounded px-3 py-2"
-            />
-            <input
-              type="password"
-              placeholder="CVV"
-              value={cvv}
-              onChange={(e) => setCvv(e.target.value)}
-              maxLength="3"
-              className="w-1/2 border rounded px-3 py-2"
+              placeholder="Cardholder Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full border rounded-lg pl-10 pr-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
             />
           </div>
+
+          <div className="relative">
+            <FaCreditCard className="absolute left-3 top-3 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Card Number (16 digits)"
+              value={cardNumber}
+              onChange={(e) => setCardNumber(e.target.value)}
+              maxLength="16"
+              className="w-full border rounded-lg pl-10 pr-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
+            />
+          </div>
+
+          <div className="flex space-x-4">
+            <div className="relative w-1/2">
+              <FaCalendarAlt className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="MM/YY"
+                value={expiry}
+                onChange={(e) => setExpiry(e.target.value)}
+                maxLength="5"
+                className="w-full border rounded-lg pl-10 pr-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
+              />
+            </div>
+            <div className="relative w-1/2">
+              <FaLock className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="password"
+                placeholder="CVV"
+                value={cvv}
+                onChange={(e) => setCvv(e.target.value)}
+                maxLength="3"
+                className="w-full border rounded-lg pl-10 pr-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Pay Button */}
           <button
             onClick={handlePayment}
             disabled={loading}
-            className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600 disabled:opacity-50"
+            className="w-full bg-green-600 text-white py-3 rounded-lg shadow-md hover:bg-green-700 transition font-semibold flex justify-center items-center gap-2 disabled:opacity-50"
           >
-            {loading ? "Processing..." : `Pay ₹${totalAmount}`}
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <svg
+                  className="animate-spin h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8H4z"
+                  ></path>
+                </svg>
+                Processing...
+              </span>
+            ) : (
+              <>Pay ₹{totalAmount}</>
+            )}
           </button>
         </div>
+
+        {/* Security Note */}
+        <p className="text-xs text-gray-400 mt-4 text-center">
+          🔒 Your payment is secured and encrypted.
+        </p>
       </div>
     </div>
   );

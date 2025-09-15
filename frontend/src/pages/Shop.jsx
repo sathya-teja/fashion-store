@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -21,64 +21,77 @@ const Shop = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const queryParams = new URLSearchParams(location.search);
 
-  const [filters, setFilters] = useState({
-    gender: queryParams.get("gender") || "",
-    type: queryParams.get("type") || "",
-    style: queryParams.get("style") || "",
-    season: queryParams.get("season") || "",
-    search: queryParams.get("search") || "",
-  });
+  // ✅ Parse query only once on mount
+  const initialFilters = useMemo(() => {
+    const queryParams = new URLSearchParams(location.search);
+    return {
+      gender: queryParams.get("gender") || "",
+      type: queryParams.get("type") || "",
+      style: queryParams.get("style") || "",
+      season: queryParams.get("season") || "",
+      search: queryParams.get("search") || "",
+    };
+  }, []); // run once
 
+  const [filters, setFilters] = useState(initialFilters);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  // 🔍 Fetch products
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
+  // ✅ Fetch products function
+  const fetchProducts = async (filters) => {
+    try {
+      setLoading(true);
 
-        let url = "http://localhost:5000/api/products?";
-        const queryString = Object.entries(filters)
-          .filter(([key, value]) => key !== "search" && value)
-          .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-          .join("&");
+      let url = "http://localhost:5000/api/products?";
+      const queryString = Object.entries(filters)
+        .filter(([key, value]) => key !== "search" && value)
+        .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+        .join("&");
 
-        if (queryString) url += queryString;
+      if (queryString) url += queryString;
 
-        const { data } = await axios.get(url);
-        let results = data.products || [];
+      const { data } = await axios.get(url);
+      let results = data.products || [];
 
-        // ✅ filter only by product name
-        if (filters.search) {
-          results = results.filter((p) =>
-            p.name.toLowerCase().includes(filters.search.toLowerCase())
-          );
-        }
-
-        setProducts(results);
-        setLoading(false);
-      } catch (err) {
-        setError("Failed to fetch products");
-        setLoading(false);
+      // ✅ frontend search filter
+      if (filters.search) {
+        results = results.filter((p) =>
+          p.name.toLowerCase().includes(filters.search.toLowerCase())
+        );
       }
-    };
-    fetchProducts();
+
+      setProducts(results);
+    } catch (err) {
+      setError("Failed to fetch products");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Debounced fetch
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchProducts(filters);
+    }, 400); // wait 400ms after typing
+
+    return () => clearTimeout(handler);
   }, [filters]);
 
+  // ✅ Filter change handler
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     const newFilters = { ...filters, [name]: value };
     setFilters(newFilters);
 
+    // ✅ update URL without infinite loops
     const searchParams = new URLSearchParams(newFilters);
-    navigate(`/shop?${searchParams.toString()}`);
+    navigate(`/shop?${searchParams.toString()}`, { replace: true });
   };
 
   const clearFilters = () => {
-    setFilters({ gender: "", type: "", style: "", season: "", search: "" });
-    navigate("/shop");
+    const reset = { gender: "", type: "", style: "", season: "", search: "" };
+    setFilters(reset);
+    navigate("/shop", { replace: true });
   };
 
   const addToWishlist = async (productId) => {
@@ -95,7 +108,7 @@ const Shop = () => {
     }
   };
 
-  // 🔧 Shared filter UI
+  // 🔧 Shared Filter UI
   const FilterContent = (
     <div className="space-y-4">
       {/* Gender */}
@@ -103,7 +116,7 @@ const Shop = () => {
         name="gender"
         value={filters.gender}
         onChange={handleFilterChange}
-        className="w-full border border-neutral-border rounded px-3 py-2 text-sm"
+        className="w-full border rounded px-3 py-2 text-sm"
       >
         <option value="">All Genders</option>
         <option value="Men">Men</option>
@@ -117,7 +130,7 @@ const Shop = () => {
         name="type"
         value={filters.type}
         onChange={handleFilterChange}
-        className="w-full border border-neutral-border rounded px-3 py-2 text-sm"
+        className="w-full border rounded px-3 py-2 text-sm"
       >
         <option value="">All Types</option>
         <option value="Shirt">Shirt</option>
@@ -134,7 +147,7 @@ const Shop = () => {
         name="style"
         value={filters.style}
         onChange={handleFilterChange}
-        className="w-full border border-neutral-border rounded px-3 py-2 text-sm"
+        className="w-full border rounded px-3 py-2 text-sm"
       >
         <option value="">All Styles</option>
         <option value="Casual">Casual</option>
@@ -149,7 +162,7 @@ const Shop = () => {
         name="season"
         value={filters.season}
         onChange={handleFilterChange}
-        className="w-full border border-neutral-border rounded px-3 py-2 text-sm"
+        className="w-full border rounded px-3 py-2 text-sm"
       >
         <option value="">All Seasons</option>
         <option value="Summer">Summer</option>
@@ -164,13 +177,13 @@ const Shop = () => {
         placeholder="Search by name..."
         value={filters.search}
         onChange={handleFilterChange}
-        className="w-full border border-neutral-border rounded px-3 py-2 text-sm"
+        className="w-full border rounded px-3 py-2 text-sm"
       />
 
       {/* Clear Filters */}
       <button
         onClick={clearFilters}
-        className="w-full text-sm px-4 py-2 border rounded hover:bg-neutral-light"
+        className="w-full text-sm px-4 py-2 border rounded hover:bg-gray-100"
       >
         Clear Filters
       </button>
@@ -186,7 +199,7 @@ const Shop = () => {
     <div className="container mx-auto px-4 lg:px-8 py-10">
       <div className="flex gap-8">
         {/* Desktop Sidebar Filters */}
-        <aside className="hidden lg:block w-64 bg-neutral-light p-4 rounded-lg shadow-sm sticky top-20 h-fit">
+        <aside className="hidden lg:block w-64 bg-gray-50 p-4 rounded-lg shadow-sm sticky top-20 h-fit">
           <h2 className="text-lg font-semibold mb-4">Filters</h2>
           {FilterContent}
         </aside>
@@ -196,7 +209,7 @@ const Shop = () => {
           <div className="lg:hidden flex justify-end mb-6 w-full">
             <button
               onClick={() => setMobileFiltersOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 border rounded text-sm hover:bg-neutral-light"
+              className="flex items-center gap-2 px-4 py-2 border rounded text-sm hover:bg-gray-100"
             >
               <SlidersHorizontal size={16} /> Filters
             </button>
@@ -234,7 +247,7 @@ const Shop = () => {
                   {/* ✅ Sale Badge */}
                   {product.discountPrice &&
                     product.discountPrice < product.price && (
-                      <span className="absolute top-2 left-2 bg-accent text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1">
+                      <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1">
                         <Tag size={10} /> Sale
                       </span>
                     )}
@@ -248,41 +261,39 @@ const Shop = () => {
                   </button>
 
                   {/* ✅ Image */}
-<div className="rounded-lg overflow-hidden aspect-[3/4] bg-gray-50 flex items-center justify-center">
-  <img
-    src={
-      product.imageUrl ||
-      "https://via.placeholder.com/300x400?text=No+Image"
-    }
-    alt={product.name}
-    className="w-full h-full object-contain p-2"
-  />
-</div>
+                  <div className="rounded-lg overflow-hidden aspect-[3/4] bg-gray-50 flex items-center justify-center">
+                    <img
+                      src={
+                        product.imageUrl ||
+                        "https://via.placeholder.com/300x400?text=No+Image"
+                      }
+                      alt={product.name}
+                      className="w-full h-full object-contain p-2"
+                    />
+                  </div>
 
                   {/* Title */}
-                  <h2 className="mt-2 text-xs font-semibold text-neutral-text line-clamp-2">
+                  <h2 className="mt-2 text-xs font-semibold text-gray-700 line-clamp-2">
                     {product.name}
                   </h2>
 
                   {/* ✅ Price */}
                   {product.discountPrice ? (
-                    <p className="text-accent font-semibold text-xs">
+                    <p className="text-red-500 font-semibold text-xs">
                       ₹{product.discountPrice}{" "}
-                      <span className="line-through text-neutral-subtext ml-1">
+                      <span className="line-through text-gray-400 ml-1">
                         ₹{product.price}
                       </span>
                     </p>
                   ) : (
-                    <p className="text-neutral-subtext text-xs">
-                      ₹{product.price}
-                    </p>
+                    <p className="text-gray-500 text-xs">₹{product.price}</p>
                   )}
 
                   {/* ✅ Actions */}
                   <div className="flex items-center mt-auto pt-2 gap-1">
                     <Link
                       to={`/product/${product._id}`}
-                      className="flex-1 h-6 px-1 text-[10px] bg-primary text-white rounded hover:bg-dark transition flex items-center justify-center gap-1"
+                      className="flex-1 h-6 px-1 text-[10px] bg-blue-600 text-white rounded hover:bg-blue-700 transition flex items-center justify-center gap-1"
                     >
                       <Eye size={10} /> View
                     </Link>
