@@ -55,8 +55,10 @@ function App() {
           </Routes>
         </div>
 
-        {/* ✅ Global Footer */}
-        <Footer />
+        {/* ✅ Global Footer (hidden on small, visible on md+) */}
+<div className="hidden md:block">
+  <Footer />
+</div>
 
         {/* ✅ Global Bottom Navigation (mobile only) */}
         <BottomNav />
