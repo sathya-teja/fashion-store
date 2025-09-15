@@ -1,3 +1,4 @@
+// MockPayment.jsx (Fixed Clear Cart)
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -67,11 +68,14 @@ const MockPayment = () => {
 
       if (isSuccess) {
         try {
+          // ✅ Save current items before clearing
+          const orderedItems = [...cart.items];
+
           // ✅ Save order to backend
           await axios.post(
             "http://localhost:5000/api/orders",
             {
-              orderItems: cart.items.map((i) => ({
+              orderItems: orderedItems.map((i) => ({
                 product: i.product._id,
                 quantity: i.quantity,
               })),
@@ -92,14 +96,16 @@ const MockPayment = () => {
             { headers: { Authorization: `Bearer ${userInfo.token}` } }
           );
 
-          clearCart();
+          // ✅ Clear both backend & frontend cart
+          await clearCart();
 
+          // ✅ Pass saved items to confirmation page
           navigate("/order-confirmation", {
             state: {
               transactionId,
               amount: totalAmount,
               shipping,
-              orderedItems: cart.items,
+              orderedItems,
               status: "success",
             },
           });
@@ -116,29 +122,27 @@ const MockPayment = () => {
 
   return (
     <div className="min-h-screen flex justify-center items-center bg-gray-50 px-4">
-      <div className="bg-white shadow-xl rounded-xl p-6 w-full max-w-md">
+      <div className="bg-white shadow-md rounded-lg p-6 w-full max-w-md">
         {/* Header */}
         <div className="flex flex-col items-center mb-6">
           <MdPayment className="text-green-600 text-4xl mb-2" />
-          <h2 className="text-2xl font-bold text-gray-800">
-            Secure Payment
-          </h2>
-          <p className="text-gray-500 text-sm">
-            Complete your purchase safely
-          </p>
+          <h2 className="text-xl font-bold text-gray-800">Payment Details</h2>
+          <p className="text-gray-500 text-sm">Complete your purchase safely</p>
         </div>
 
         {/* Stepper */}
-        <div className="flex justify-between items-center mb-6 text-xs font-medium text-gray-600">
-          <span className="flex-1 text-center">🛒 Cart</span>
-          <span className="flex-1 text-center">🚚 Shipping</span>
-          <span className="flex-1 text-center text-green-600">💳 Payment</span>
+        <div className="flex justify-between items-center mb-6 text-xs font-medium">
+          <span className="flex-1 text-center text-gray-400">Cart</span>
+          <span className="flex-1 text-center text-gray-400">Shipping</span>
+          <span className="flex-1 text-center text-green-600 font-semibold">
+            Payment
+          </span>
         </div>
 
         {error && (
-          <div className="bg-red-100 text-red-700 p-2 rounded mb-4 text-sm">
+          <p className="bg-red-100 text-red-700 p-2 rounded mb-4 text-sm">
             {error}
-          </div>
+          </p>
         )}
 
         {/* Payment Form */}
@@ -158,7 +162,7 @@ const MockPayment = () => {
             <FaCreditCard className="absolute left-3 top-3 text-gray-400" />
             <input
               type="text"
-              placeholder="Card Number (16 digits)"
+              placeholder="Card Number"
               value={cardNumber}
               onChange={(e) => setCardNumber(e.target.value)}
               maxLength="16"
@@ -195,10 +199,10 @@ const MockPayment = () => {
           <button
             onClick={handlePayment}
             disabled={loading}
-            className="w-full bg-green-600 text-white py-3 rounded-lg shadow-md hover:bg-green-700 transition font-semibold flex justify-center items-center gap-2 disabled:opacity-50"
+            className="w-full bg-green-600 text-white py-3 rounded-lg shadow hover:bg-green-700 transition font-semibold flex justify-center items-center gap-2 disabled:opacity-50"
           >
             {loading ? (
-              <span className="flex items-center gap-2">
+              <>
                 <svg
                   className="animate-spin h-5 w-5 text-white"
                   xmlns="http://www.w3.org/2000/svg"
@@ -220,7 +224,7 @@ const MockPayment = () => {
                   ></path>
                 </svg>
                 Processing...
-              </span>
+              </>
             ) : (
               <>Pay ₹{totalAmount}</>
             )}

@@ -1,61 +1,90 @@
+// Profile.jsx (Myntra-style with Loyalty, Verification, Last Login)
 import { useEffect, useState } from "react";
+import {
+  Box,
+  Typography,
+  Avatar,
+  Container,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  TextField,
+  Button,
+} from "@mui/material";
+import {
+  ShoppingBag,
+  Favorite,
+  LocationOn,
+  Logout,
+  ChevronRight,
+  Settings,
+  Star,
+  Verified,
+} from "@mui/icons-material";
+import { useNavigate, Link } from "react-router-dom";
 
-const Profile = () => {
+export default function Profile() {
   const userInfo = JSON.parse(localStorage.getItem("userInfo") || "null");
-  const [formData, setFormData] = useState({
-    name: userInfo?.name || "",
-    email: userInfo?.email || "",
+  const navigate = useNavigate();
+
+  const [profile, setProfile] = useState({
+    name: "",
+    email: "",
+    loyaltyPoints: 0,
+    isVerified: false,
+    lastLogin: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editProfile, setEditProfile] = useState({
+    name: "",
+    email: "",
     password: "",
   });
-  const [orders, setOrders] = useState([]);
-  const [message, setMessage] = useState("");
 
-  // Fetch user profile (optional since localStorage already has info)
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!userInfo) return;
+      if (!userInfo) {
+        navigate("/login");
+        return;
+      }
       try {
         const res = await fetch("http://localhost:5000/api/users/profile", {
           headers: { Authorization: `Bearer ${userInfo.token}` },
         });
         const data = await res.json();
         if (res.ok) {
-          setFormData((prev) => ({
-            ...prev,
+          setProfile({
             name: data.name,
             email: data.email,
-          }));
+            loyaltyPoints: data.loyaltyPoints || 0,
+            isVerified: data.isVerified || false,
+            lastLogin: data.lastLogin || null,
+          });
+          setEditProfile({ name: data.name, email: data.email, password: "" });
         }
       } catch (err) {
-        console.error("Failed to fetch profile", err);
+        console.error("Failed to load profile", err);
+      } finally {
+        setLoading(false);
       }
     };
-
-    const fetchOrders = async () => {
-      if (!userInfo) return;
-      try {
-        const res = await fetch("http://localhost:5000/api/orders/myorders", {
-          headers: { Authorization: `Bearer ${userInfo.token}` },
-        });
-        const data = await res.json();
-        if (res.ok) setOrders(data);
-      } catch (err) {
-        console.error("Failed to fetch orders", err);
-      }
-    };
-
     fetchProfile();
-    fetchOrders();
-  }, [userInfo]);
+  }, [userInfo, navigate]);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleLogout = () => {
+    localStorage.removeItem("userInfo");
+    navigate("/login");
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
-    if (!userInfo) return;
-
     try {
       const res = await fetch("http://localhost:5000/api/users/profile", {
         method: "PUT",
@@ -63,89 +92,174 @@ const Profile = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${userInfo.token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(editProfile),
       });
       const data = await res.json();
-
-      if (!res.ok) throw new Error(data.message || "Update failed");
-
-      // Update localStorage so Navbar updates too
+      if (!res.ok) throw new Error(data.message || "Could not update");
       localStorage.setItem("userInfo", JSON.stringify(data));
-      setMessage("✅ Profile updated successfully!");
+      setProfile((prev) => ({
+        ...prev,
+        name: data.name,
+        email: data.email,
+      }));
+      setOpenDialog(false);
     } catch (err) {
-      setMessage(`❌ ${err.message}`);
+      alert("❌ " + err.message);
     }
   };
 
-  if (!userInfo) return <p className="p-6">Please log in to view your profile.</p>;
+  if (loading)
+    return (
+      <Box display="flex" justifyContent="center" mt={6}>
+        <CircularProgress />
+      </Box>
+    );
+
+  if (!userInfo)
+    return (
+      <Box textAlign="center" mt={6}>
+        <Typography>Please log in to view your profile.</Typography>
+        <Button
+          sx={{ mt: 2 }}
+          variant="contained"
+          color="primary"
+          onClick={() => navigate("/login")}
+        >
+          Go to Login
+        </Button>
+      </Box>
+    );
 
   return (
-    <div className="max-w-4xl mx-auto mt-10 p-6 border rounded shadow">
-      <h1 className="text-2xl font-bold mb-6">My Profile</h1>
-
-      {/* Profile Form */}
-      <form onSubmit={handleUpdate} className="space-y-4 mb-10">
-        <input
-          type="text"
-          name="name"
-          placeholder="Name"
-          value={formData.name}
-          onChange={handleChange}
-          className="w-full px-4 py-2 border rounded"
-        />
-        <input
-          type="email"
-          name="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={handleChange}
-          className="w-full px-4 py-2 border rounded"
-        />
-        <input
-          type="password"
-          name="password"
-          placeholder="New Password"
-          value={formData.password}
-          onChange={handleChange}
-          className="w-full px-4 py-2 border rounded"
-        />
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+    <Container maxWidth="sm" sx={{ py: 3, pb: 10 }} >
+      {/* Header */}
+      <Box textAlign="center" mb={3}>
+        <Avatar
+          sx={{
+            width: 90,
+            height: 90,
+            mx: "auto",
+            bgcolor: "grey.400",
+            fontSize: 36,
+          }}
         >
-          Update Profile
-        </button>
-      </form>
+          {profile?.name?.charAt(0).toUpperCase() || "U"}
+        </Avatar>
+        <Typography variant="h6" mt={1}>
+          {profile.name}
+        </Typography>
+        <Typography color="text.secondary">{profile.email}</Typography>
+        <Typography color="success.main" fontWeight="bold" mt={1}>
+          Loyalty Points: {profile.loyaltyPoints}
+        </Typography>
+        {profile.isVerified ? (
+          <Typography color="primary" display="flex" justifyContent="center" alignItems="center" gap={1}>
+            <Verified fontSize="small" /> Verified
+          </Typography>
+        ) : (
+          <Typography color="error">Not Verified</Typography>
+        )}
+        {profile.lastLogin && (
+          <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+            Last login: {new Date(profile.lastLogin).toLocaleString()}
+          </Typography>
+        )}
+      </Box>
 
-      {message && <p className="mb-6 text-green-500">{message}</p>}
+      {/* Options List */}
+      <List sx={{ bgcolor: "white", borderRadius: 1 }}>
+        <ListItem button component={Link} to="/orders">
+          <ListItemIcon>
+            <ShoppingBag color="primary" />
+          </ListItemIcon>
+          <ListItemText primary="Orders" secondary="Check your order status" />
+          <ChevronRight />
+        </ListItem>
+        <Divider />
 
-      {/* Order History */}
-      <h2 className="text-xl font-semibold mb-4">My Orders</h2>
-      {orders.length === 0 ? (
-        <p>No orders found.</p>
-      ) : (
-        <ul className="space-y-4">
-          {orders.map((order) => (
-            <li
-              key={order._id}
-              className="border p-4 rounded shadow hover:shadow-md"
-            >
-              <p className="font-semibold">Order ID: {order._id}</p>
-              <p>Status: {order.status}</p>
-              <p>Total: ₹{order.totalPrice}</p>
-              <ul className="mt-2">
-                {order.orderItems.map((item) => (
-                  <li key={item._id}>
-                    {item.product?.name || "Deleted Product"} (x{item.quantity})
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+        <ListItem button component={Link} to="/wishlist">
+          <ListItemIcon>
+            <Favorite color="error" />
+          </ListItemIcon>
+          <ListItemText primary="Wishlist" secondary="Your saved items" />
+          <ChevronRight />
+        </ListItem>
+        <Divider />
+
+        <ListItem button component={Link} to="/addresses">
+          <ListItemIcon>
+            <LocationOn color="success" />
+          </ListItemIcon>
+          <ListItemText primary="Addresses" secondary="Manage shipping addresses" />
+          <ChevronRight />
+        </ListItem>
+        <Divider />
+
+        <ListItem>
+          <ListItemIcon>
+            <Star color="warning" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Rewards & Loyalty"
+            secondary={`${profile.loyaltyPoints} points available`}
+          />
+          <ChevronRight />
+        </ListItem>
+        <Divider />
+
+        <ListItem button onClick={() => setOpenDialog(true)}>
+          <ListItemIcon>
+            <Settings color="action" />
+          </ListItemIcon>
+          <ListItemText primary="Account Settings" secondary="Edit profile details" />
+          <ChevronRight />
+        </ListItem>
+        <Divider />
+
+        <ListItem button onClick={handleLogout}>
+          <ListItemIcon>
+            <Logout color="action" />
+          </ListItemIcon>
+          <ListItemText primary="Logout" />
+          <ChevronRight />
+        </ListItem>
+      </List>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Edit Profile</DialogTitle>
+        <DialogContent>
+          <Box component="form" onSubmit={handleUpdate} sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Name"
+              name="name"
+              value={editProfile.name}
+              onChange={(e) => setEditProfile({ ...editProfile, name: e.target.value })}
+            />
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Email"
+              name="email"
+              value={editProfile.email}
+              onChange={(e) => setEditProfile({ ...editProfile, email: e.target.value })}
+            />
+            <TextField
+              fullWidth
+              margin="normal"
+              label="New Password"
+              type="password"
+              value={editProfile.password}
+              onChange={(e) => setEditProfile({ ...editProfile, password: e.target.value })}
+            />
+            <Button type="submit" fullWidth variant="contained" sx={{ mt: 2 }}>
+              Save Changes
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+    </Container>
   );
-};
-
-export default Profile;
+}

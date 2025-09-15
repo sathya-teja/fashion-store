@@ -1,28 +1,20 @@
 import { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useCart } from "../context/CartContext";
 import { toast } from "react-toastify";
-import {
-  Heart,
-  ShoppingCart,
-  Eye,
-  Tag,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
+import { Heart, Tag, SlidersHorizontal, X, Star } from "lucide-react";
+import { useWishlist } from "../context/WishlistContext";
 
 const Shop = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { addToCart } = useCart();
-  const userInfo = JSON.parse(localStorage.getItem("userInfo") || "null");
+  const { wishlist, addToWishlist, removeFromWishlist } = useWishlist();
 
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ Parse query only once on mount
+  // ✅ Parse query once
   const initialFilters = useMemo(() => {
     const queryParams = new URLSearchParams(location.search);
     return {
@@ -32,13 +24,13 @@ const Shop = () => {
       season: queryParams.get("season") || "",
       search: queryParams.get("search") || "",
     };
-  }, []); // run once
+  }, [location.search]);
 
   const [filters, setFilters] = useState(initialFilters);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // ✅ Fetch products function
-  const fetchProducts = async (filters) => {
+  const fetchProducts = async () => {
     try {
       setLoading(true);
 
@@ -68,45 +60,67 @@ const Shop = () => {
     }
   };
 
-  // ✅ Debounced fetch
+  // ✅ Fetch when filters OR URL changes
   useEffect(() => {
-    const handler = setTimeout(() => {
-      fetchProducts(filters);
-    }, 400); // wait 400ms after typing
+    fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
-    return () => clearTimeout(handler);
-  }, [filters]);
-
-  // ✅ Filter change handler
+  // ✅ Handle filter change
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    const newFilters = { ...filters, [name]: value };
-    setFilters(newFilters);
+    setFilters((prev) => ({ ...prev, [name]: value }));
+  };
 
-    // ✅ update URL without infinite loops
-    const searchParams = new URLSearchParams(newFilters);
+  // ✅ Apply filters (updates URL)
+  const applyFilters = () => {
+    const searchParams = new URLSearchParams(filters);
     navigate(`/shop?${searchParams.toString()}`, { replace: true });
+    setMobileFiltersOpen(false);
   };
 
   const clearFilters = () => {
     const reset = { gender: "", type: "", style: "", season: "", search: "" };
     setFilters(reset);
     navigate("/shop", { replace: true });
+    setMobileFiltersOpen(false);
   };
 
-  const addToWishlist = async (productId) => {
-    if (!userInfo) return toast.error("Please log in to add items to wishlist");
-    try {
-      await axios.post(
-        `http://localhost:5000/api/wishlist/${productId}`,
-        {},
-        { headers: { Authorization: `Bearer ${userInfo.token}` } }
-      );
-      toast.success("Added to wishlist!");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to add to wishlist");
-    }
+  // ✅ Wishlist helper
+  const isInWishlist = (id) => wishlist.some((p) => p._id === id);
+
+  // 🔧 Render star rating
+  const renderStars = (rating = 0, numReviews = 0) => {
+    const fullStars = Math.round(rating);
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        {[...Array(5)].map((_, i) => (
+          <Star
+            key={i}
+            size={12}
+            className={
+              i < fullStars
+                ? "text-yellow-500 fill-yellow-500"
+                : "text-gray-300"
+            }
+          />
+        ))}
+        <span className="text-gray-500 text-xs">
+          ({numReviews || 0})
+        </span>
+      </div>
+    );
   };
+
+  // 🔧 Skeleton Loader
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-lg shadow-sm p-3 animate-pulse">
+      <div className="aspect-[3/4] bg-gray-200 rounded-lg mb-2"></div>
+      <div className="h-3 bg-gray-200 rounded w-3/4 mb-1"></div>
+      <div className="h-3 bg-gray-200 rounded w-1/2 mb-1"></div>
+      <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+    </div>
+  );
 
   // 🔧 Shared Filter UI
   const FilterContent = (
@@ -180,23 +194,27 @@ const Shop = () => {
         className="w-full border rounded px-3 py-2 text-sm"
       />
 
-      {/* Clear Filters */}
-      <button
-        onClick={clearFilters}
-        className="w-full text-sm px-4 py-2 border rounded hover:bg-gray-100"
-      >
-        Clear Filters
-      </button>
+      {/* Buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={applyFilters}
+          className="flex-1 text-sm px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Apply
+        </button>
+        <button
+          onClick={clearFilters}
+          className="flex-1 text-sm px-4 py-2 border rounded hover:bg-gray-100"
+        >
+          Clear
+        </button>
+      </div>
     </div>
   );
 
-  // 🔄 Loading & error
-  if (loading)
-    return <p className="text-center py-6 text-gray-500">Loading products...</p>;
-  if (error) return <p className="text-center text-red-500">{error}</p>;
-
+  // 🔄 Render
   return (
-    <div className="container mx-auto px-4 lg:px-8 py-10">
+    <div className="container mx-auto px-4 lg:px-8 py-2 pb-20">
       <div className="flex gap-8">
         {/* Desktop Sidebar Filters */}
         <aside className="hidden lg:block w-64 bg-gray-50 p-4 rounded-lg shadow-sm sticky top-20 h-fit">
@@ -235,14 +253,23 @@ const Shop = () => {
           )}
 
           {/* Products Grid */}
-          {products.length === 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : error ? (
+            <p className="text-center text-red-500">{error}</p>
+          ) : products.length === 0 ? (
             <p className="text-center text-gray-500">No products found.</p>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {products.map((product) => (
-                <div
+                <Link
                   key={product._id}
-                  className="bg-white rounded-lg shadow-sm hover:shadow-md transition p-3 flex flex-col h-full relative"
+                  to={`/product/${product._id}`}
+                  className="bg-white rounded-lg shadow-sm hover:shadow-md transition p-3 flex flex-col h-full relative group"
                 >
                   {/* ✅ Sale Badge */}
                   {product.discountPrice &&
@@ -254,10 +281,24 @@ const Shop = () => {
 
                   {/* ✅ Wishlist Heart */}
                   <button
-                    onClick={() => addToWishlist(product._id)}
-                    className="absolute top-2 right-2 text-pink-500 hover:text-pink-600"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (isInWishlist(product._id)) {
+                        removeFromWishlist(product._id);
+                      } else {
+                        addToWishlist(product._id);
+                      }
+                    }}
+                    className={`absolute top-2 right-2 rounded-full p-1 shadow transition z-10 ${
+                      isInWishlist(product._id)
+                        ? "text-pink-500 bg-white"
+                        : "text-gray-400 bg-white/80 hover:text-pink-500"
+                    }`}
                   >
-                    <Heart size={14} />
+                    <Heart
+                      size={14}
+                      className={isInWishlist(product._id) ? "fill-pink-500" : ""}
+                    />
                   </button>
 
                   {/* ✅ Image */}
@@ -268,47 +309,30 @@ const Shop = () => {
                         "https://via.placeholder.com/300x400?text=No+Image"
                       }
                       alt={product.name}
-                      className="w-full h-full object-contain p-2"
+                      className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
 
-                  {/* Title */}
-                  <h2 className="mt-2 text-xs font-semibold text-gray-700 line-clamp-2">
-                    {product.name}
-                  </h2>
+                  {/* ✅ Title + Price + Rating */}
+                  <div className="mt-2">
+                    <h2 className="text-xs font-semibold text-gray-700 line-clamp-2">
+                      {product.name}
+                    </h2>
+                    {product.discountPrice ? (
+                      <p className="text-red-500 font-semibold text-xs">
+                        ₹{product.discountPrice}{" "}
+                        <span className="line-through text-gray-400 ml-1">
+                          ₹{product.price}
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-gray-500 text-xs">₹{product.price}</p>
+                    )}
 
-                  {/* ✅ Price */}
-                  {product.discountPrice ? (
-                    <p className="text-red-500 font-semibold text-xs">
-                      ₹{product.discountPrice}{" "}
-                      <span className="line-through text-gray-400 ml-1">
-                        ₹{product.price}
-                      </span>
-                    </p>
-                  ) : (
-                    <p className="text-gray-500 text-xs">₹{product.price}</p>
-                  )}
-
-                  {/* ✅ Actions */}
-                  <div className="flex items-center mt-auto pt-2 gap-1">
-                    <Link
-                      to={`/product/${product._id}`}
-                      className="flex-1 h-6 px-1 text-[10px] bg-blue-600 text-white rounded hover:bg-blue-700 transition flex items-center justify-center gap-1"
-                    >
-                      <Eye size={10} /> View
-                    </Link>
-
-                    <button
-                      onClick={() => {
-                        addToCart(product._id, 1);
-                        toast.success("Added to cart!");
-                      }}
-                      className="flex-1 h-6 px-1 text-[10px] bg-green-600 text-white rounded hover:bg-green-700 transition flex items-center justify-center gap-1"
-                    >
-                      <ShoppingCart size={10} /> Add
-                    </button>
+                    {/* ✅ Ratings */}
+                    {renderStars(product.rating, product.numReviews)}
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}

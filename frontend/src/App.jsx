@@ -9,7 +9,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ProductDetails from "./pages/ProductDetails";
 import { CartProvider } from "./context/CartContext";
-import Checkout from "./pages/CheckOut";
+import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
 import AdminOrders from "./pages/AdminOrders";
 import AdminProducts from "./pages/AdminProducts";
@@ -19,6 +19,7 @@ import MockPayment from "./pages/MockPayment";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { WishlistProvider } from "./context/WishlistContext";
 
 
 
@@ -26,6 +27,7 @@ import "react-toastify/dist/ReactToastify.css";
 function App() {
   return (
     <BrowserRouter>
+    <WishlistProvider>
       <CartProvider>
         {/* ✅ Navbar always on top */}
         <Navbar />
@@ -54,11 +56,12 @@ function App() {
         </div>
 
         {/* ✅ Global Footer */}
-        <Footer />
+        {/* <Footer /> */}
 
         {/* ✅ Global Bottom Navigation (mobile only) */}
         <BottomNav />
       </CartProvider>
+      </WishlistProvider>
     </BrowserRouter>
   );
 }

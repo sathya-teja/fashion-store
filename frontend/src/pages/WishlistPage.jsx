@@ -1,47 +1,20 @@
-import { useEffect, useState } from "react";
-import axios from "axios";
 import { Link } from "react-router-dom";
 import { Heart, Eye, Trash2 } from "lucide-react";
+import { useWishlist } from "../context/WishlistContext";
 
 const WishlistPage = () => {
-  const [wishlist, setWishlist] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { wishlist, removeFromWishlist, loading } = useWishlist(); // ✅ from context
   const userInfo = JSON.parse(localStorage.getItem("userInfo") || "null");
-
-  useEffect(() => {
-    const fetchWishlist = async () => {
-      if (!userInfo) return;
-      try {
-        const { data } = await axios.get("http://localhost:5000/api/wishlist", {
-          headers: { Authorization: `Bearer ${userInfo.token}` },
-        });
-        setWishlist(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchWishlist();
-  }, [userInfo]);
-
-  const removeFromWishlist = async (productId) => {
-    try {
-      await axios.delete(`http://localhost:5000/api/wishlist/${productId}`, {
-        headers: { Authorization: `Bearer ${userInfo.token}` },
-      });
-      setWishlist((prev) => prev.filter((item) => item._id !== productId));
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   if (!userInfo)
     return (
       <div className="container mx-auto p-6 text-center">
         <p className="text-gray-600">
           Please{" "}
-          <Link to="/login" className="text-accent font-semibold hover:underline">
+          <Link
+            to="/login"
+            className="text-accent font-semibold hover:underline"
+          >
             log in
           </Link>{" "}
           to view your wishlist.
@@ -52,7 +25,7 @@ const WishlistPage = () => {
   if (loading) return <p className="p-6 text-center">Loading wishlist...</p>;
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8">
+    <div className="container mx-auto px-4 sm:px-6 py-8 pb-20">
       <h1 className="text-2xl sm:text-3xl font-bold mb-6 flex items-center gap-2">
         My Wishlist <Heart className="text-pink-500" />
       </h1>
@@ -109,32 +82,30 @@ const WishlistPage = () => {
                   </p>
                 )}
 
-               {/* Actions */}
-<div className="mt-auto flex gap-2 pt-2">
-  <Link
-    to={`/product/${product._id}`}
-    className="flex items-center justify-center gap-1 
-               px-1 py-1 text-[11px] 
-               lg:px-3 lg:py-2 lg:text-sm
-               rounded-md bg-secondary text-white 
-               hover:bg-dark transition"
-  >
-    <Eye size={12} className="lg:size-16 lg:w-4 lg:h-4" /> View
-  </Link>
+                {/* Actions */}
+                <div className="mt-auto flex gap-2 pt-2">
+                  <Link
+                    to={`/product/${product._id}`}
+                    className="flex items-center justify-center gap-1 
+                               px-1 py-1 text-[11px] 
+                               lg:px-3 lg:py-2 lg:text-sm
+                               rounded-md bg-secondary text-white 
+                               hover:bg-dark transition"
+                  >
+                    <Eye size={12} className="lg:w-4 lg:h-4" /> View
+                  </Link>
 
-  <button
-    onClick={() => removeFromWishlist(product._id)}
-    className="flex items-center justify-center gap-1 
-               px-1 py-1 text-[11px] text-gray-600 
-               lg:px-3 lg:py-2 lg:text-sm 
-               rounded-md border 
-               hover:bg-red-50 hover:text-red-600 transition"
-  >
-    <Trash2 size={12} className="lg:w-4 lg:h-4" /> Remove
-  </button>
-</div>
-
-
+                  <button
+                    onClick={() => removeFromWishlist(product._id)}
+                    className="flex items-center justify-center gap-1 
+                               px-1 py-1 text-[11px] text-gray-600 
+                               lg:px-3 lg:py-2 lg:text-sm 
+                               rounded-md border 
+                               hover:bg-red-50 hover:text-red-600 transition"
+                  >
+                    <Trash2 size={12} className="lg:w-4 lg:h-4" /> Remove
+                  </button>
+                </div>
               </div>
             </div>
           ))}

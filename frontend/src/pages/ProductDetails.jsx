@@ -1,472 +1,549 @@
-// ProductDetails.jsx
+// ProductDetails.jsx (Optimized - Reduced Extra Requests)
 import { useEffect, useState, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useCart } from "../context/CartContext";
 import { toast } from "react-toastify";
+import { FavoriteBorder, Favorite, ShoppingBag } from "@mui/icons-material";
+
 import {
-  Heart,
-  ShoppingCart,
-  Star as StarIcon,
-  ArrowLeftRight,
-} from "lucide-react";
+  Box,
+  Container,
+  Typography,
+  Button,
+  Grid,
+  Chip,
+  Rating,
+  Card,
+  CardContent,
+  Avatar,
+  TextField,
+  ToggleButtonGroup,
+  ToggleButton,
+  Paper,
+} from "@mui/material";
+import { useWishlist } from "../context/WishlistContext";
 
 export default function ProductDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { addToCart } = useCart();
   const userInfo = JSON.parse(localStorage.getItem("userInfo") || "null");
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
   const [mainImage, setMainImage] = useState("");
-  const [qty, setQty] = useState("1"); // string to fix caret issue
+  const [related, setRelated] = useState([]);
+  const [selectedSize, setSelectedSize] = useState("");
+  const [selectedColor, setSelectedColor] = useState("");
 
+  // Review state
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
-  const [reviewLoading, setReviewLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const [related, setRelated] = useState([]);
-  const [relatedLoading, setRelatedLoading] = useState(false);
+  const { wishlist, addToWishlist, removeFromWishlist } = useWishlist();
+  const isInWishlist = wishlist.some((p) => p._id === id);
 
-  // fetch product
+  // ✅ Fetch product (only when id changes)
   useEffect(() => {
-    let cancelled = false;
     const fetchProduct = async () => {
-      setLoading(true);
-      setError("");
       try {
         const { data } = await axios.get(
           `http://localhost:5000/api/products/${id}`
         );
-        if (cancelled) return;
         setProduct(data);
         setMainImage(data.imageUrl || "");
       } catch (err) {
-        console.error(err);
-        if (!cancelled) setError("Failed to fetch product details");
+        toast.error("Failed to fetch product details");
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
     fetchProduct();
-    return () => {
-      cancelled = true;
-    };
   }, [id]);
 
-  // fetch related
+  // ✅ Fetch related (only when gender or id changes, not whole product object)
   useEffect(() => {
-    if (!product) return;
+    if (!product?.gender) return;
     const fetchRelated = async () => {
-      setRelatedLoading(true);
       try {
-        const queryKey = product.type
-          ? `type=${encodeURIComponent(product.type)}`
-          : product.gender
-          ? `gender=${encodeURIComponent(product.gender)}`
-          : "";
-        const url = queryKey
-          ? `http://localhost:5000/api/products?${queryKey}&limit=6`
-          : `http://localhost:5000/api/products?limit=6`;
-        const { data } = await axios.get(url);
-        const others = (data.products || []).filter(
-          (p) => p._id !== product._id
+        const { data } = await axios.get(
+          `http://localhost:5000/api/products?gender=${product.gender}&limit=6`
         );
-        setRelated(others.slice(0, 6));
+        setRelated((data.products || []).filter((p) => p._id !== product._id));
       } catch (err) {
-        console.error("related fetch", err);
-      } finally {
-        setRelatedLoading(false);
+        console.error(err);
       }
     };
     fetchRelated();
-  }, [product]);
+  }, [product?.gender, product?._id]);
 
-  // avg rating
   const avgRating = useMemo(() => {
     if (!product?.reviews?.length) return 0;
     const sum = product.reviews.reduce((s, r) => s + (r.rating || 0), 0);
     return +(sum / product.reviews.length).toFixed(1);
   }, [product]);
 
-  // wishlist
-  const addToWishlist = async () => {
+  const inStock =
+    product?.countInStock == null ? true : product.countInStock > 0;
+
+  const handleWishlist = () => {
     if (!userInfo) {
-      toast.error("Please log in to add to wishlist");
+      toast.error("Please log in to manage wishlist");
+      navigate("/login");
       return;
     }
-    try {
-      await axios.post(
-        `http://localhost:5000/api/wishlist/${id}`,
-        {},
-        { headers: { Authorization: `Bearer ${userInfo.token}` } }
-      );
+
+    if (isInWishlist) {
+      removeFromWishlist(id);
+      toast.success("Removed from wishlist!");
+    } else {
+      addToWishlist(id);
       toast.success("Added to wishlist!");
-    } catch (err) {
-      toast.error(err?.response?.data?.message || "Failed to add to wishlist");
     }
   };
 
-  // review submit
-  const submitReview = async (e) => {
+  // ✅ Optimized: Don’t re-fetch product after review, patch state locally
+  const handleReviewSubmit = async (e) => {
     e.preventDefault();
     if (!userInfo) {
-      toast.error("Please log in to write a review");
+      toast.error("Please log in to submit a review");
       return;
     }
     if (!rating || !comment.trim()) {
-      toast.error("Please provide rating and comment");
+      toast.error("Please provide a rating and comment");
       return;
     }
     try {
-      setReviewLoading(true);
-      await axios.post(
+      setSubmitting(true);
+      const { data: newReview } = await axios.post(
         `http://localhost:5000/api/reviews/${id}`,
         { rating, comment },
         { headers: { Authorization: `Bearer ${userInfo.token}` } }
       );
       toast.success("Review submitted!");
+
+      // ✅ Append review to state instead of refetching
+      setProduct((prev) => ({
+        ...prev,
+        reviews: [...(prev.reviews || []), newReview],
+      }));
+
       setRating(0);
       setComment("");
-      const { data } = await axios.get(
-        `http://localhost:5000/api/products/${id}`
-      );
-      setProduct(data);
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to submit review");
     } finally {
-      setReviewLoading(false);
+      setSubmitting(false);
     }
   };
 
-  // add to cart
-  const handleAddToCart = () => {
-    addToCart(product._id, Number(qty));
-    toast.success("Added to cart!");
-  };
-
-  if (loading)
-    return (
-      <div className="container mx-auto px-6 py-10">
-        <div className="animate-pulse grid md:grid-cols-2 gap-8">
-          <div className="h-[360px] bg-gray-200 rounded-lg" />
-          <div className="space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-3/4" />
-            <div className="h-4 bg-gray-200 rounded w-1/2" />
-            <div className="h-6 bg-gray-200 rounded w-1/3" />
-            <div className="h-10 bg-gray-200 rounded" />
-            <div className="h-10 bg-gray-200 rounded" />
-          </div>
-        </div>
-      </div>
-    );
-
-  if (error) return <p className="text-center py-10 text-red-500">{error}</p>;
-  if (!product) return <p className="text-center py-10">No product found</p>;
-
-  const inStock =
-    product.countInStock == null ? true : product.countInStock > 0;
+  if (loading) return <p style={{ textAlign: "center" }}>Loading...</p>;
+  if (!product) return <p style={{ textAlign: "center" }}>Product not found</p>;
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-10">
-      <div className="grid md:grid-cols-2 gap-10 items-start">
-        {/* Images */}
-        <div>
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="w-full h-[240px] sm:h-[320px] md:h-[480px] flex items-center justify-center bg-gray-50">
-              <img
-                src={
-                  mainImage ||
-                  product.imageUrl ||
-                  "https://via.placeholder.com/600x600?text=No+Image"
-                }
-                alt={product.name}
-                className="max-h-full max-w-full object-contain transition-transform duration-300 hover:scale-105"
-              />
-            </div>
+    <Container sx={{ pb: { xs: 16, md: 6 } }}>
+      {/* --- Image Section --- */}
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+        <Box
+          sx={{
+            width: "100%",
+            maxWidth: { xs: 320, sm: 400, md: 450 },
+            mx: "auto",
+            bgcolor: "#f9f9f9",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            borderRadius: 2,
+            overflow: "hidden",
+          }}
+        >
+          <img
+            src={
+              mainImage ||
+              product.imageUrl ||
+              "https://via.placeholder.com/400x400?text=No+Image"
+            }
+            alt={product.name || "Unnamed Product"}
+            style={{
+              width: "100%",
+              height: "auto",
+              maxHeight: 450,
+              objectFit: "contain",
+              display: "block",
+              margin: "0 auto",
+            }}
+          />
+        </Box>
+      </Box>
 
-            <div className="flex gap-3 p-3 overflow-x-auto">
-              {product.imageUrl && (
-                <button
-                  onClick={() => setMainImage(product.imageUrl)}
-                  className={`w-20 h-20 rounded-md overflow-hidden border ${
-                    mainImage === product.imageUrl
-                      ? "ring-2 ring-accent"
-                      : "border-gray-200"
-                  }`}
+      {/* Thumbnails */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 1,
+          mt: 2,
+          overflowX: "auto",
+          justifyContent: "center",
+        }}
+      >
+        {[product.imageUrl, ...(product.images || [])].map(
+          (img, idx) =>
+            img && (
+              <Box
+                key={idx}
+                sx={{
+                  border:
+                    mainImage === img ? "2px solid #f50057" : "1px solid #ddd",
+                  borderRadius: 2,
+                  p: 0.5,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+                onClick={() => setMainImage(img)}
+              >
+                <img
+                  src={img}
+                  alt={`thumb-${idx}`}
+                  style={{
+                    width: 70,
+                    height: 70,
+                    objectFit: "cover",
+                    borderRadius: 4,
+                  }}
+                />
+              </Box>
+            )
+        )}
+      </Box>
+
+      {/* --- Product Info --- */}
+      <Box sx={{ mt: 3 }}>
+        <Typography variant="h5" fontWeight="bold">
+          {product.name}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {product.brand || "Generic"}
+        </Typography>
+
+        <Box display="flex" alignItems="center" gap={1} mt={1}>
+          <Rating value={avgRating} precision={0.5} readOnly size="small" />
+          <Typography variant="body2" color="text.secondary">
+            {avgRating} ({product.reviews?.length || 0} reviews)
+          </Typography>
+        </Box>
+
+        {/* Price */}
+        <Box mt={2} display="flex" alignItems="center" gap={2}>
+          {product.discountPrice ? (
+            <>
+              <Typography variant="h6" color="secondary" fontWeight="bold">
+                ₹{product.discountPrice}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ textDecoration: "line-through", color: "text.secondary" }}
+              >
+                ₹{product.price}
+              </Typography>
+              <Chip
+                label={`-${Math.round(
+                  ((product.price - product.discountPrice) / product.price) * 100
+                )}%`}
+                color="success"
+                size="small"
+              />
+            </>
+          ) : (
+            <Typography variant="h6">₹{product.price}</Typography>
+          )}
+        </Box>
+
+        {/* --- Size Selector --- */}
+        {product.sizes?.length > 0 && (
+          <Box mt={3}>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              Select Size
+            </Typography>
+            <ToggleButtonGroup
+              value={selectedSize}
+              exclusive
+              onChange={(e, newSize) => setSelectedSize(newSize)}
+              sx={{
+                mt: 1,
+                "& .MuiToggleButton-root": {
+                  borderRadius: "8px",
+                  px: 2,
+                  py: 1,
+                  textTransform: "none",
+                  fontWeight: "bold",
+                },
+              }}
+            >
+              {product.sizes.map((s, idx) => (
+                <ToggleButton key={idx} value={s.size} size="small">
+                  {s.size}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Box>
+        )}
+
+        {/* --- Color Selector --- */}
+        {product.colors?.length > 0 && (
+          <Box mt={3}>
+            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              Select Color
+            </Typography>
+            <Box display="flex" gap={2} mt={1}>
+              {product.colors.map((c, idx) => (
+                <Box
+                  key={idx}
+                  onClick={() => setSelectedColor(c.name)}
+                  sx={{
+                    cursor: "pointer",
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    border:
+                      selectedColor === c.name
+                        ? "3px solid #f50057"
+                        : "2px solid #ddd",
+                    bgcolor: c.hex || "#ccc",
+                    boxShadow:
+                      selectedColor === c.name
+                        ? "0 0 6px rgba(0,0,0,0.3)"
+                        : "none",
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
+        )}
+
+        {/* --- Description --- */}
+        {product.description && (
+          <Paper elevation={0} sx={{ p: 2, mt: 3, bgcolor: "#fafafa" }}>
+            <Typography variant="body1" color="text.secondary">
+              {product.description}
+            </Typography>
+          </Paper>
+        )}
+      </Box>
+
+      {/* Sticky Add to Cart + Wishlist */}
+      <Box
+        sx={{
+          position: { xs: "fixed", md: "static" },
+          bottom: 56,
+          left: 0,
+          right: 0,
+          bgcolor: "white",
+          p: 1.2,
+          borderTop: "1px solid #eee",
+          display: "flex",
+          gap: 1.5,
+          zIndex: 1200,
+        }}
+      >
+        <Button
+          variant="outlined"
+          color="error"
+          startIcon={isInWishlist ? <Favorite /> : <FavoriteBorder />}
+          fullWidth
+          onClick={handleWishlist}
+        >
+          {isInWishlist ? "Remove" : "Wishlist"}
+        </Button>
+
+        <Button
+          variant="contained"
+          color="secondary"
+          startIcon={<ShoppingBag />}
+          onClick={() => {
+            if (product.sizes?.length && !selectedSize) {
+              toast.error("Please select a size");
+              return;
+            }
+            if (product.colors?.length && !selectedColor) {
+              toast.error("Please select a color");
+              return;
+            }
+            addToCart(product._id, 1, {
+              size: selectedSize,
+              color: selectedColor,
+            });
+            toast.success("Added to cart!");
+          }}
+          disabled={!inStock}
+          fullWidth
+        >
+          {inStock ? "Add to Bag" : "Out of Stock"}
+        </Button>
+      </Box>
+
+      {/* --- Product Details --- */}
+      <Box sx={{ mt: 6 }}>
+        <Typography
+          variant="h6"
+          fontWeight="bold"
+          sx={{
+            mb: 2,
+            borderBottom: "2px solid #f50057",
+            display: "inline-block",
+            pb: 0.5,
+          }}
+        >
+          Product Details
+        </Typography>
+        <Grid container spacing={1}>
+          <Grid item xs={6}>
+            <Typography variant="body2" color="text.secondary">
+              <strong>SKU:</strong> {product.sku || "N/A"}
+            </Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Weight:</strong> {product.weight || "N/A"} kg
+            </Typography>
+          </Grid>
+          <Grid item xs={12}>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Dimensions:</strong>{" "}
+              {product.dimensions?.length || 0} x {product.dimensions?.width || 0} x{" "}
+              {product.dimensions?.height || 0} cm
+            </Typography>
+          </Grid>
+        </Grid>
+      </Box>
+
+      {/* --- Reviews --- */}
+      <Box sx={{ mt: 6 }}>
+        <Typography
+          variant="h6"
+          fontWeight="bold"
+          sx={{
+            mb: 2,
+            borderBottom: "2px solid #f50057",
+            display: "inline-block",
+            pb: 0.5,
+          }}
+        >
+          Reviews & Ratings
+        </Typography>
+        {product.reviews?.length ? (
+          <Grid container spacing={2}>
+            {product.reviews.map((rev) => (
+              <Grid item xs={12} sm={6} key={rev._id}>
+                <Card>
+                  <CardContent sx={{ display: "flex", gap: 2 }}>
+                    <Avatar>{rev.name[0].toUpperCase()}</Avatar>
+                    <Box>
+                      <Typography fontWeight="bold">{rev.name}</Typography>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Rating value={rev.rating} size="small" readOnly />
+                        <Typography variant="body2" color="text.secondary">
+                          {rev.rating}/5
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {rev.comment}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        ) : (
+          <Typography>No reviews yet.</Typography>
+        )}
+
+        {userInfo ? (
+          <Box component="form" onSubmit={handleReviewSubmit} sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" fontWeight="bold">
+              Write a Review
+            </Typography>
+            <Rating
+              value={rating}
+              onChange={(e, newValue) => setRating(newValue)}
+              precision={0.5}
+              sx={{ my: 1 }}
+            />
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Share your thoughts..."
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              color="secondary"
+              disabled={submitting}
+            >
+              {submitting ? "Submitting..." : "Submit Review"}
+            </Button>
+          </Box>
+        ) : (
+          <Typography sx={{ mt: 2 }}>
+            Please{" "}
+            <Link to="/login" style={{ color: "#f50057", fontWeight: "bold" }}>
+              log in
+            </Link>{" "}
+            to write a review.
+          </Typography>
+        )}
+      </Box>
+
+      {/* --- Related Products --- */}
+      <Box sx={{ mt: 6, mb: 8 }}>
+        <Typography variant="h6" fontWeight="bold" gutterBottom>
+          You May Also Like
+        </Typography>
+        <Grid container spacing={2}>
+          {related.map((rp) => (
+            <Grid item xs={6} sm={4} md={3} key={rp._id}>
+              <Card component={Link} to={`/product/${rp._id}`}>
+                <Box
+                  sx={{
+                    aspectRatio: "3/4",
+                    bgcolor: "#f5f5f5",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
                   <img
-                    src={product.imageUrl}
-                    alt="thumb"
-                    className="w-full h-full object-cover"
+                    src={
+                      rp.imageUrl ||
+                      "https://via.placeholder.com/300x400?text=No+Image"
+                    }
+                    alt={rp.name}
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
-                </button>
-              )}
-              {Array.isArray(product.images) &&
-                product.images.map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setMainImage(img)}
-                    className={`w-20 h-20 rounded-md overflow-hidden border ${
-                      mainImage === img
-                        ? "ring-2 ring-accent"
-                        : "border-gray-200"
-                    }`}
-                  >
-                    <img
-                      src={img}
-                      alt={`thumb-${idx}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center gap-4 text-sm text-gray-600">
-            <div className="flex items-center gap-1">
-              <StarIcon size={16} className="text-yellow-400" />
-              <span className="font-semibold">{avgRating}</span>
-              <span className="text-gray-500">
-                ({product.numReviews || 0})
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <ArrowLeftRight size={14} />
-              <span className="text-gray-500">SKU: {product.sku || "—"}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Details */}
-        <div className="space-y-6">
-          <h1 className="text-2xl sm:text-3xl font-bold">{product.name}</h1>
-          <p className="text-sm text-gray-500">{product.brand || ""}</p>
-
-          <div className="flex items-center gap-4">
-            {product.discountPrice ? (
-              <div className="flex items-baseline gap-3">
-                <span className="text-2xl sm:text-3xl font-extrabold text-accent">
-                  ₹{product.discountPrice}
-                </span>
-                <span className="line-through text-gray-400">
-                  ₹{product.price}
-                </span>
-              </div>
-            ) : (
-              <span className="text-2xl sm:text-3xl font-extrabold text-accent">
-                ₹{product.price}
-              </span>
-            )}
-            {inStock ? (
-              <span className="px-2 py-1 bg-green-50 text-green-700 rounded text-sm">
-                In stock
-              </span>
-            ) : (
-              <span className="px-2 py-1 bg-red-50 text-red-700 rounded text-sm">
-                Out of stock
-              </span>
-            )}
-          </div>
-
-          <p className="text-gray-700">{product.description}</p>
-
-          {/* Qty + Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">Qty</label>
-              <input
-                type="number"
-                min="1"
-                max={product.countInStock || 99}
-                value={qty}
-                onChange={(e) => {
-                  let v = e.target.value;
-                  if (v === "") {
-                    setQty("");
-                    return;
-                  }
-                  let num = parseInt(v, 10);
-                  if (isNaN(num) || num < 1) num = 1;
-                  if (product.countInStock && num > product.countInStock)
-                    num = product.countInStock;
-                  setQty(String(num));
-                }}
-                className="w-20 border rounded px-2 py-1 text-sm"
-              />
-            </div>
-
-            <div className="flex gap-3 w-full sm:w-auto">
-              <button
-                onClick={handleAddToCart}
-                disabled={!inStock}
-                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg shadow text-white ${
-                  inStock
-                    ? "bg-secondary hover:bg-dark"
-                    : "bg-gray-300 cursor-not-allowed"
-                }`}
-              >
-                <ShoppingCart size={16} />
-                Add to cart
-              </button>
-              <button
-                onClick={addToWishlist}
-                className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border hover:shadow-sm"
-              >
-                <Heart size={16} className="text-pink-500" />
-                Wishlist
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Reviews */}
-      <div className="mt-12">
-        <h2 className="text-xl sm:text-2xl font-bold">Reviews</h2>
-        <div className="mt-5 grid md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 space-y-4">
-            {!product.reviews?.length ? (
-              <div className="p-6 bg-gray-50 rounded shadow">
-                No reviews yet — be the first to write one.
-              </div>
-            ) : (
-              product.reviews.map((rev) => (
-                <div key={rev._id} className="p-4 bg-white rounded shadow">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center text-sm uppercase">
-                        {rev.name ? rev.name[0] : "U"}
-                      </div>
-                      <div>
-                        <div className="font-semibold">{rev.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(rev.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <StarIcon
-                          key={i}
-                          size={14}
-                          className={
-                            i < rev.rating
-                              ? "text-yellow-400"
-                              : "text-gray-300"
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-gray-700">{rev.comment}</p>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Review form */}
-          <div>
-            {userInfo ? (
-              <form
-                onSubmit={submitReview}
-                className="bg-white p-4 rounded shadow space-y-3"
-              >
-                <div className="text-sm font-semibold">Write a review</div>
-                <div className="flex gap-2">
-                  {Array.from({ length: 5 }).map((_, i) => {
-                    const starIndex = i + 1;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setRating(starIndex)}
-                        className={`p-1 rounded ${
-                          rating >= starIndex
-                            ? "bg-yellow-100"
-                            : "hover:bg-gray-100"
-                        }`}
-                      >
-                        <StarIcon
-                          size={20}
-                          className={
-                            rating >= starIndex
-                              ? "text-yellow-400"
-                              : "text-gray-300"
-                          }
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  rows={4}
-                  placeholder="Share your experience..."
-                  className="w-full border rounded p-2 text-sm"
-                  required
-                />
-                <button
-                  type="submit"
-                  disabled={reviewLoading}
-                  className="w-full bg-secondary text-white py-2 rounded hover:bg-dark transition"
-                >
-                  {reviewLoading ? "Submitting..." : "Submit Review"}
-                </button>
-              </form>
-            ) : (
-              <div className="p-4 bg-gray-50 rounded shadow text-sm">
-                Please{" "}
-                <Link to="/login" className="text-primary hover:underline">
-                  log in
-                </Link>{" "}
-                to write a review.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Related products */}
-      <div className="mt-12">
-        <h3 className="text-xl font-semibold">You may also like</h3>
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-          {relatedLoading
-            ? Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-40 bg-gray-100 rounded animate-pulse"
-                />
-              ))
-            : related.map((rp) => (
-                <Link
-                  key={rp._id}
-                  to={`/product/${rp._id}`}
-                  className="bg-white rounded p-3 shadow hover:shadow-md transition flex flex-col"
-                >
-                  <div className="aspect-[3/4] rounded overflow-hidden bg-gray-50 flex items-center justify-center">
-                    <img
-                      src={
-                        rp.imageUrl ||
-                        "https://via.placeholder.com/300x400?text=No+Image"
-                      }
-                      alt={rp.name}
-                      className="w-full h-full object-contain p-2"
-                    />
-                  </div>
-                  <div className="mt-2 text-sm font-medium line-clamp-2">
+                </Box>
+                <CardContent>
+                  <Typography variant="body2" noWrap>
                     {rp.name}
-                  </div>
-                  <div className="mt-auto text-sm text-accent font-semibold">
+                  </Typography>
+                  <Typography
+                    variant="subtitle2"
+                    color="secondary"
+                    fontWeight="bold"
+                  >
                     ₹{rp.discountPrice || rp.price}
-                  </div>
-                </Link>
-              ))}
-        </div>
-      </div>
-    </div>
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    </Container>
   );
 }

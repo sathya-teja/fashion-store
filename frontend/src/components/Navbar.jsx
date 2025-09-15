@@ -1,131 +1,287 @@
-import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useState, useEffect } from "react";
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Badge,
+  Box,
+  Avatar,
+  Menu,
+  MenuItem,
+  InputBase,
+  Slide,
+} from "@mui/material";
+import { styled } from "@mui/material/styles";
+import { ShoppingCart, Favorite, Search, Login } from "@mui/icons-material";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
-import { Menu, X } from "lucide-react";
+
+// --- Search Bar ---
+const SearchBar = styled("form")(({ theme }) => ({
+  position: "relative",
+  borderRadius: "8px",
+  backgroundColor: "#f5f5f5",
+  "&:hover": { backgroundColor: "#eaeaea" },
+  marginLeft: theme.spacing(2),
+  width: "100%",
+  maxWidth: "250px",
+  transition: "all 0.3s ease",
+  "&:focus-within": { maxWidth: "400px" },
+}));
+
+const SearchIconWrapper = styled("div")(({ theme }) => ({
+  padding: theme.spacing(0, 2),
+  height: "100%",
+  position: "absolute",
+  pointerEvents: "none",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#777",
+}));
+
+const StyledInputBase = styled(InputBase)(({ theme }) => ({
+  width: "100%",
+  "& .MuiInputBase-input": {
+    padding: theme.spacing(1, 1, 1, 0),
+    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
+  },
+}));
+
+// --- Custom NavLink Styling ---
+const navLinkStyle = ({ isActive }) => ({
+  textDecoration: "none",
+  fontWeight: isActive ? "700" : "500",
+  color: isActive ? "#f50057" : "inherit",
+  borderBottom: isActive ? "2px solid #f50057" : "none",
+  paddingBottom: "4px",
+  transition: "all 0.2s ease-in-out",
+});
 
 export default function Navbar() {
   const userInfo = JSON.parse(localStorage.getItem("userInfo") || "null");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-
   const { cart } = useCart() || { cart: { items: [] } };
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [elevate, setElevate] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleProfileMenu = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
 
   const handleLogout = () => {
     localStorage.removeItem("userInfo");
-    window.location.href = "/";
+    window.dispatchEvent(new Event("storage")); // 🔹 sync logout
+    handleMenuClose();
+    navigate("/");
   };
 
-  const linkClass = ({ isActive }) =>
-    isActive
-      ? "text-accent font-semibold transition"
-      : "text-gray-200 hover:text-white transition";
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/shop?search=${encodeURIComponent(searchQuery)}`);
+      setMobileSearchOpen(false);
+    }
+  };
+
+  // Shadow only when scrolling
+  useEffect(() => {
+    const handleScroll = () => setElevate(window.scrollY > 10);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
-    <nav className="bg-primary shadow-md px-4 md:px-6 py-4 flex justify-between items-center relative">
-      {/* Logo */}
-      <h1 className="text-xl md:text-2xl font-bold text-white tracking-wide">
-        Fashion <span className="text-accent">Store</span>
-      </h1>
+    <AppBar
+      position="sticky"
+      sx={{
+        bgcolor: "white",
+        color: "black",
+        boxShadow: elevate ? "0px 2px 8px rgba(0,0,0,0.15)" : "none",
+        transition: "box-shadow 0.3s ease-in-out",
+      }}
+    >
+      <Toolbar sx={{ justifyContent: "space-between", gap: { xs: 1, md: 2 } }}>
+        {/* Logo */}
+        <Typography
+          component={NavLink}
+          to="/"
+          sx={{
+            fontWeight: "bold",
+            textDecoration: "none",
+            color: "inherit",
+            fontSize: { xs: "1rem", sm: "1.2rem", md: "1.5rem" },
+            whiteSpace: "nowrap",
+          }}
+        >
+          Fashion <Box component="span" sx={{ color: "#f50057" }}>Store</Box>
+        </Typography>
 
-      {/* Desktop Links */}
-      <ul className="hidden md:flex space-x-6 items-center">
-        <li>
-          <NavLink to="/" className={linkClass}>Home</NavLink>
-        </li>
-        <li>
-          <NavLink to="/shop" className={linkClass}>Shop</NavLink>
-        </li>
-        <li className="relative">
-          <NavLink to="/cart" className={linkClass}>Cart</NavLink>
-          {cart?.items?.length > 0 && (
-            <span className="absolute -top-2 -right-3 bg-accent text-white text-xs font-bold rounded-full px-2 shadow">
-              {cart.items.length}
-            </span>
-          )}
-        </li>
+        {/* Desktop Search */}
+        <SearchBar
+          onSubmit={handleSearchSubmit}
+          sx={{ display: { xs: "none", md: "flex" } }}
+        >
+          <SearchIconWrapper>
+            <Search />
+          </SearchIconWrapper>
+          <StyledInputBase
+            placeholder="Search products…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </SearchBar>
 
-        {userInfo && (
-          <li>
-            <NavLink to="/wishlist" className={linkClass}>Wishlist</NavLink>
-          </li>
-        )}
+        {/* Nav Links + Icons */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: { xs: 0.5, sm: 1.5, md: 2 },
+            flexWrap: "nowrap",
+            overflow: "hidden",
+          }}
+        >
+          {/* Desktop Links */}
+          <Box sx={{ display: { xs: "none", md: "flex" }, gap: 2 }}>
+            <Typography component={NavLink} to="/" style={navLinkStyle}>
+              Home
+            </Typography>
+            <Typography component={NavLink} to="/shop" style={navLinkStyle}>
+              Shop
+            </Typography>
+          </Box>
 
-        {/* User Dropdown */}
-        {userInfo ? (
-          <li className="relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center space-x-1 text-accent font-semibold hover:text-white transition"
+          {/* Mobile Search Icon */}
+          <IconButton
+            color="inherit"
+            sx={{ display: { xs: "flex", md: "none" } }}
+            onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+          >
+            <Search />
+          </IconButton>
+
+          {/* Wishlist */}
+          {userInfo && (
+            <IconButton
+              color="inherit"
+              component={NavLink}
+              to="/wishlist"
+              sx={{ display: { xs: "none", sm: "flex" } }}
             >
-              <span>{userInfo.name}</span>
-              <svg
-                className={`w-4 h-4 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
+              <Favorite />
+            </IconButton>
+          )}
 
-            {dropdownOpen && (
-              <ul className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-50">
-                <li>
-                  <NavLink to="/profile" className="block px-4 py-2 text-gray-700 hover:bg-gray-100 transition" onClick={() => setDropdownOpen(false)}>Profile</NavLink>
-                </li>
-                {userInfo?.isAdmin && (
-                  <>
-                    <li>
-                      <NavLink to="/admin/orders" className="block px-4 py-2 text-primary hover:bg-gray-100 transition" onClick={() => setDropdownOpen(false)}>Admin Orders</NavLink>
-                    </li>
-                    <li>
-                      <NavLink to="/admin/products" className="block px-4 py-2 text-primary hover:bg-gray-100 transition" onClick={() => setDropdownOpen(false)}>Admin Products</NavLink>
-                    </li>
-                  </>
-                )}
-                <li>
-                  <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100 transition">Logout</button>
-                </li>
-              </ul>
-            )}
-          </li>
-        ) : (
-          <>
-            <li><NavLink to="/login" className={linkClass}>Login</NavLink></li>
-            <li><NavLink to="/register" className={linkClass}>Register</NavLink></li>
-          </>
-        )}
-      </ul>
+          {/* Cart */}
+          <IconButton color="inherit" component={NavLink} to="/cart">
+            <Badge badgeContent={cart?.items?.length || 0} color="error">
+              <ShoppingCart />
+            </Badge>
+          </IconButton>
 
-      {/* Mobile Menu Button */}
-      <button className="md:hidden text-white" onClick={() => setMobileOpen(!mobileOpen)}>
-        {mobileOpen ? <X size={24}/> : <Menu size={24}/>}
-      </button>
-
-      {/* Mobile Drawer */}
-      {mobileOpen && (
-        <div className="absolute top-full left-0 w-full bg-primary text-white flex flex-col py-4 px-6 space-y-3 md:hidden shadow-lg z-40">
-          <NavLink to="/" className={linkClass} onClick={() => setMobileOpen(false)}>Home</NavLink>
-          <NavLink to="/shop" className={linkClass} onClick={() => setMobileOpen(false)}>Shop</NavLink>
-          <NavLink to="/cart" className={linkClass} onClick={() => setMobileOpen(false)}>Cart</NavLink>
-          {userInfo && <NavLink to="/wishlist" className={linkClass} onClick={() => setMobileOpen(false)}>Wishlist</NavLink>}
+          {/* Profile / Auth */}
           {userInfo ? (
             <>
-              <NavLink to="/profile" className={linkClass} onClick={() => setMobileOpen(false)}>Profile</NavLink>
-              {userInfo?.isAdmin && (
-                <>
-                  <NavLink to="/admin/orders" className={linkClass} onClick={() => setMobileOpen(false)}>Admin Orders</NavLink>
-                  <NavLink to="/admin/products" className={linkClass} onClick={() => setMobileOpen(false)}>Admin Products</NavLink>
-                </>
-              )}
-              <button onClick={handleLogout} className="text-red-400 text-left">Logout</button>
+              <IconButton onClick={handleProfileMenu}>
+                <Avatar
+                  sx={{
+                    bgcolor: "#f50057",
+                    width: { xs: 28, sm: 32 },
+                    height: { xs: 28, sm: 32 },
+                    fontSize: { xs: "0.8rem", sm: "0.9rem" },
+                  }}
+                >
+                  {userInfo.name[0].toUpperCase()}
+                </Avatar>
+              </IconButton>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleMenuClose}
+              >
+                <MenuItem
+                  onClick={() => {
+                    navigate("/profile");
+                    handleMenuClose();
+                  }}
+                >
+                  Profile
+                </MenuItem>
+
+                {/* ✅ FIX: no Fragment, use array of MenuItems */}
+                {userInfo?.isAdmin && [
+                  <MenuItem
+                    key="admin-orders"
+                    onClick={() => {
+                      navigate("/admin/orders");
+                      handleMenuClose();
+                    }}
+                  >
+                    Admin Orders
+                  </MenuItem>,
+                  <MenuItem
+                    key="admin-products"
+                    onClick={() => {
+                      navigate("/admin/products");
+                      handleMenuClose();
+                    }}
+                  >
+                    Admin Products
+                  </MenuItem>,
+                ]}
+
+                <MenuItem onClick={handleLogout}>Logout</MenuItem>
+              </Menu>
             </>
           ) : (
             <>
-              <NavLink to="/login" className={linkClass} onClick={() => setMobileOpen(false)}>Login</NavLink>
-              <NavLink to="/register" className={linkClass} onClick={() => setMobileOpen(false)}>Register</NavLink>
+              {/* Desktop Auth Links */}
+              <Box sx={{ display: { xs: "none", md: "flex" }, gap: 2 }}>
+                <Typography component={NavLink} to="/login" style={navLinkStyle}>
+                  Login
+                </Typography>
+                <Typography component={NavLink} to="/register" style={navLinkStyle}>
+                  Register
+                </Typography>
+              </Box>
+              {/* Mobile Auth Icon */}
+              <IconButton
+                sx={{ display: { xs: "flex", md: "none" } }}
+                component={NavLink}
+                to="/login"
+                color="inherit"
+              >
+                <Login />
+              </IconButton>
             </>
           )}
-        </div>
-      )}
-    </nav>
+        </Box>
+      </Toolbar>
+
+      {/* Mobile Full-width Search */}
+      <Slide direction="down" in={mobileSearchOpen} mountOnEnter unmountOnExit>
+        <Box
+          component="form"
+          onSubmit={handleSearchSubmit}
+          sx={{
+            px: 2,
+            py: 1,
+            bgcolor: "#f5f5f5",
+            display: { xs: "flex", md: "none" },
+          }}
+        >
+          <InputBase
+            fullWidth
+            autoFocus
+            placeholder="Search products…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </Box>
+      </Slide>
+    </AppBar>
   );
 }

@@ -10,6 +10,7 @@ export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState({ items: [] });
   const [initialLoading, setInitialLoading] = useState(true);
 
+  // ✅ Fetch Cart
   const fetchCart = async () => {
     if (!userInfo) {
       setCart({ items: [] });
@@ -28,13 +29,14 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  // ✅ Add to Cart
   const addToCart = async (productId, quantity = 1) => {
     if (!userInfo) {
       toast.error("Please log in to add items to cart");
       return;
     }
 
-    // ✅ Optimistic update
+    // Optimistic update
     setCart((prev) => {
       const existing = prev.items.find((i) => i.product._id === productId);
       let newItems;
@@ -66,6 +68,7 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  // ✅ Update Quantity
   const updateQuantity = async (itemId, newQty) => {
     setCart((prev) => ({
       ...prev,
@@ -87,6 +90,7 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  // ✅ Remove Item
   const removeFromCart = async (itemId) => {
     const removedItem = cart.items.find((i) => i._id === itemId);
 
@@ -105,13 +109,15 @@ export const CartProvider = ({ children }) => {
       toast.error("Failed to remove item");
     }
 
-    // ✅ Optional Undo
+    // Optional Undo
     toast.success(
       <div>
         Removed <b>{removedItem?.product?.name}</b>
         <button
           className="ml-2 underline text-blue-500"
-          onClick={() => addToCart(removedItem.product._id, removedItem.quantity)}
+          onClick={() =>
+            addToCart(removedItem.product._id, removedItem.quantity)
+          }
         >
           Undo
         </button>
@@ -120,10 +126,26 @@ export const CartProvider = ({ children }) => {
     );
   };
 
-  const clearCart = () => {
+  // ✅ Clear Cart (Frontend + Backend)
+  // ✅ Clear Cart (Frontend + Backend) without flicker
+const clearCart = async () => {
+  if (!userInfo) {
     setCart({ items: [] });
-    toast("Cart cleared 🛒");
-  };
+    return;
+  }
+  try {
+    const { data } = await axios.delete("http://localhost:5000/api/cart/clear", {
+      headers: { Authorization: `Bearer ${userInfo.token}` },
+    });
+    // Use backend's response cart (already empty)
+    setCart(data.cart || { items: [] });
+    toast.success("Cart cleared 🛒");
+  } catch (err) {
+    toast.error("Failed to clear cart");
+    console.error("Clear cart error:", err);
+  }
+};
+
 
   useEffect(() => {
     fetchCart();

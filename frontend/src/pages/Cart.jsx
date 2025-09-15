@@ -1,177 +1,343 @@
-import { useEffect } from "react";
+// Cart.jsx (Updated Professional UI)
+import { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useNavigate } from "react-router-dom";
-
-// Simple skeleton loader for cart items
-const CartSkeleton = () => (
-  <div className="max-w-6xl mx-auto mt-6 px-3 sm:px-4 lg:px-6">
-    <h1 className="text-xl sm:text-2xl font-bold mb-6">Shopping Cart</h1>
-    <div className="space-y-4">
-      {[1, 2].map((n) => (
-        <div
-          key={n}
-          className="animate-pulse flex gap-4 p-4 border rounded-lg shadow bg-white"
-        >
-          <div className="w-32 h-32 bg-gray-200 rounded-lg" />
-          <div className="flex-1 space-y-3">
-            <div className="h-4 bg-gray-200 rounded w-1/2" />
-            <div className="h-4 bg-gray-200 rounded w-1/3" />
-            <div className="h-4 bg-gray-200 rounded w-1/4" />
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
+import {
+  Box,
+  Typography,
+  Grid,
+  Paper,
+  IconButton,
+  Button,
+  Divider,
+  CircularProgress,
+  Avatar,
+  TextField,
+  Chip,
+} from "@mui/material";
+import { Add, Remove, Delete, LocalOffer } from "@mui/icons-material";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 export default function Cart() {
-  const {
-    cart,
-    fetchCart,
-    removeFromCart,
-    updateQuantity,
-    initialLoading,
-  } = useCart();
+  const { cart, fetchCart, removeFromCart, updateQuantity, initialLoading } =
+    useCart();
   const userInfo = JSON.parse(localStorage.getItem("userInfo"));
   const navigate = useNavigate();
 
+  const [couponCode, setCouponCode] = useState("");
+  const [loadingCoupon, setLoadingCoupon] = useState(false);
+
+  // ✅ Fetch cart once on mount if user is logged in
   useEffect(() => {
     if (userInfo) fetchCart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userInfo]);
 
   if (!userInfo)
     return (
-      <p className="text-center mt-10 text-gray-600">
+      <Typography align="center" sx={{ mt: 6, color: "text.secondary" }}>
         Please log in to view your cart.
-      </p>
+      </Typography>
     );
 
-  if (initialLoading) return <CartSkeleton />;
+  if (initialLoading)
+    return (
+      <Box display="flex" justifyContent="center" mt={6}>
+        <CircularProgress />
+      </Box>
+    );
 
   if (!cart || !cart.items?.length)
     return (
-      <p className="text-center mt-10 text-gray-600">
-        Your cart is empty
-      </p>
+      <Typography align="center" sx={{ mt: 6, color: "text.secondary" }}>
+        Your cart is empty 🛒
+      </Typography>
     );
 
-  const total = cart.items.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
+  const total = cart.total ?? 0;
+  const subtotal = cart.subtotal ?? 0;
+  const discount =
+    subtotal && total && subtotal > total ? subtotal - total : 0;
+
+  // ✅ Apply Coupon
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return toast.error("Enter a coupon code");
+    try {
+      setLoadingCoupon(true);
+      await axios.post(
+        "http://localhost:5000/api/cart/apply-coupon",
+        { code: couponCode },
+        { headers: { Authorization: `Bearer ${userInfo.token}` } }
+      );
+      toast.success("Coupon applied!");
+      setCouponCode("");
+      fetchCart(); // fetch only once after applying coupon
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Invalid coupon");
+    } finally {
+      setLoadingCoupon(false);
+    }
+  };
+
+  // ✅ Remove Coupon
+  const handleRemoveCoupon = async () => {
+    try {
+      await axios.post(
+        "http://localhost:5000/api/cart/remove-coupon",
+        {},
+        { headers: { Authorization: `Bearer ${userInfo.token}` } }
+      );
+      toast.info("Coupon removed");
+      fetchCart();
+    } catch (err) {
+      toast.error("Failed to remove coupon");
+    }
+  };
 
   return (
-    <div className="max-w-6xl mx-auto mt-6 px-3 sm:px-4 lg:px-6">
-      <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">
-        Shopping Cart
-      </h1>
+    <Box sx={{ maxWidth: "1200px", mx: "auto", p: { xs: 2, md: 4 }, mt: 2 }} >
+      <Typography variant="h5" fontWeight="bold" gutterBottom>
+        Shopping Bag ({cart.items.length} items)
+      </Typography>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Grid container spacing={3}>
         {/* Cart Items */}
-        <div className="lg:col-span-2 space-y-4">
+        <Grid item xs={12} md={8}>
           {cart.items.map((item) => (
-            <div
+            <Paper
               key={item._id}
-              className="flex flex-col sm:flex-row gap-4 p-4 border rounded-lg shadow bg-white"
+              sx={{
+                p: 2,
+                mb: 2,
+                display: "flex",
+                gap: 2,
+                border: "1px solid #eee",
+                borderRadius: 2,
+              }}
             >
-              <img
+              <Avatar
+                variant="rounded"
                 src={item.product.imageUrl}
                 alt={item.product.name}
-                className="w-full sm:w-32 h-40 object-cover rounded-lg"
+                sx={{
+                  width: { xs: 90, sm: 110 },
+                  height: { xs: 120, sm: 140 },
+                  flexShrink: 0,
+                  bgcolor: "#f9f9f9",
+                }}
               />
 
-              <div className="flex-1 flex flex-col justify-between">
-                <div>
-                  <h2 className="font-semibold text-lg">
-                    {item.product.name}
-                  </h2>
-                  <p className="text-gray-500 text-sm">
-                    ₹{item.product.price} each
-                  </p>
-                </div>
+              <Box flex={1}>
+                <Typography fontWeight="bold" fontSize="1rem" noWrap>
+                  {item.product.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mb={1}>
+                  ₹{item.product.price} each
+                </Typography>
 
-                <div className="flex items-center justify-between mt-4">
-                  {/* Quantity Controls */}
-                  <div className="flex items-center border rounded-full overflow-hidden">
-                    <button
+                {/* Size & Color */}
+                <Box display="flex" gap={1} mb={1}>
+                  {item.selectedSize && (
+                    <Chip label={`Size: ${item.selectedSize}`} size="small" />
+                  )}
+                  {item.selectedColor && (
+                    <Chip label={`Color: ${item.selectedColor}`} size="small" />
+                  )}
+                </Box>
+
+                {/* Quantity + Price */}
+                <Box
+                  mt={1}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      border: "1px solid #ddd",
+                      borderRadius: "20px",
+                    }}
+                  >
+                    <IconButton
+                      size="small"
                       onClick={() =>
                         item.quantity > 1 &&
                         updateQuantity(item._id, item.quantity - 1)
                       }
-                      className="px-3 py-1 bg-gray-100 hover:bg-gray-200"
                     >
-                      -
-                    </button>
-                    <span className="px-4">{item.quantity}</span>
-                    <button
+                      <Remove fontSize="small" />
+                    </IconButton>
+                    <Typography sx={{ px: 2 }}>{item.quantity}</Typography>
+                    <IconButton
+                      size="small"
                       onClick={() =>
                         updateQuantity(item._id, item.quantity + 1)
                       }
-                      className="px-3 py-1 bg-gray-100 hover:bg-gray-200"
                     >
-                      +
-                    </button>
-                  </div>
+                      <Add fontSize="small" />
+                    </IconButton>
+                  </Box>
 
-                  <p className="font-bold text-lg text-gray-800">
+                  <Typography fontWeight="bold" color="text.primary">
                     ₹{item.product.price * item.quantity}
-                  </p>
-                </div>
+                  </Typography>
+                </Box>
 
-                <div className="flex gap-4 mt-2 text-sm">
-                  <button
+                {/* Remove */}
+                <Box mt={1}>
+                  <Button
+                    color="error"
+                    startIcon={<Delete />}
                     onClick={() => removeFromCart(item._id)}
-                    className="text-red-500 hover:underline"
+                    size="small"
                   >
                     Remove
-                  </button>
-                  <button className="text-blue-600 hover:underline">
-                    Save for later
-                  </button>
-                </div>
-              </div>
-            </div>
+                  </Button>
+                </Box>
+              </Box>
+            </Paper>
           ))}
-        </div>
+        </Grid>
 
         {/* Order Summary */}
-        <div className="p-6 border rounded-lg shadow-md bg-white h-fit sticky top-4">
-          <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
-          <div className="flex justify-between mb-2">
-            <span>Subtotal</span>
-            <span>₹{total}</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span>Shipping</span>
-            <span className="text-green-600">Free</span>
-          </div>
-          <div className="flex justify-between font-bold text-lg mt-4 border-t pt-2">
-            <span>Total</span>
-            <span>₹{total}</span>
-          </div>
-
-          <button
-            onClick={() => navigate("/checkout")}
-            className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium"
+        <Grid item xs={12} md={4}>
+          <Paper
+            sx={{
+              p: 3,
+              position: "sticky",
+              top: 80,
+              borderRadius: 2,
+              boxShadow: "0px 4px 12px rgba(0,0,0,0.05)",
+            }}
           >
-            Proceed to Checkout
-          </button>
-        </div>
-      </div>
+            <Typography variant="h6" fontWeight="bold" gutterBottom>
+              Price Details
+            </Typography>
 
-      {/* ✅ Mobile Fixed Checkout Button */}
-      <div className="lg:hidden fixed bottom-14 left-0 right-0 bg-white border-t shadow px-4 py-3">
-        <div className="flex justify-between items-center mb-2">
-          <span className="font-semibold">Total</span>
-          <span className="font-bold text-lg">₹{total}</span>
-        </div>
-        <button
+            <Box display="flex" justifyContent="space-between" mb={1}>
+              <Typography>Total MRP</Typography>
+              <Typography>₹{subtotal}</Typography>
+            </Box>
+
+            {discount > 0 && (
+              <Box display="flex" justifyContent="space-between" mb={1}>
+                <Typography>Discount</Typography>
+                <Typography color="success.main">-₹{discount}</Typography>
+              </Box>
+            )}
+
+            <Box display="flex" justifyContent="space-between" mb={1}>
+              <Typography>Shipping Fee</Typography>
+              <Typography color="success.main">Free</Typography>
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              fontWeight="bold"
+              mb={2}
+            >
+              <Typography>Total Amount</Typography>
+              <Typography>₹{total}</Typography>
+            </Box>
+
+            {/* Coupon input */}
+            {!cart.coupon?.code ? (
+              <Box
+                display="flex"
+                gap={1}
+                mb={2}
+                sx={{ bgcolor: "#fafafa", p: 1.5, borderRadius: 1 }}
+              >
+                <LocalOffer color="action" />
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Enter coupon code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                />
+                <Button
+                  variant="contained"
+                  color="primary"
+                  disabled={loadingCoupon}
+                  onClick={handleApplyCoupon}
+                >
+                  {loadingCoupon ? "..." : "Apply"}
+                </Button>
+              </Box>
+            ) : (
+              <Box
+                mb={2}
+                p={1.5}
+                sx={{
+                  bgcolor: "#f5f5f5",
+                  borderRadius: 1,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Typography>
+                  Applied Coupon: <b>{cart.coupon.code}</b>
+                </Typography>
+                <Button size="small" color="error" onClick={handleRemoveCoupon}>
+                  Remove
+                </Button>
+              </Box>
+            )}
+
+            {discount > 0 && (
+              <Typography color="success.main" variant="body2" mb={2}>
+                You saved ₹{discount} on this order 🎉
+              </Typography>
+            )}
+
+            <Button
+              fullWidth
+              variant="contained"
+              color="secondary"
+              onClick={() => navigate("/checkout")}
+              sx={{ mt: 1 }}
+            >
+              Place Order
+            </Button>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* ✅ Mobile Fixed Checkout Bar */}
+      <Box
+        sx={{
+          display: { xs: "block", md: "none" },
+          position: "fixed",
+          bottom: 60,
+          left: 0,
+          right: 0,
+          bgcolor: "white",
+          borderTop: "1px solid #eee",
+          p: 2,
+          boxShadow: "0 -2px 6px rgba(0,0,0,0.05)",
+        }}
+      >
+        <Box display="flex" justifyContent="space-between" mb={1}>
+          <Typography fontWeight="bold">Total</Typography>
+          <Typography fontWeight="bold">₹{total}</Typography>
+        </Box>
+        <Button
+          fullWidth
+          variant="contained"
+          color="primary"
           onClick={() => navigate("/checkout")}
-          className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium"
         >
-          Proceed to Checkout
-        </button>
-      </div>
-    </div>
+          Place Order
+        </Button>
+      </Box>
+    </Box>
   );
 }

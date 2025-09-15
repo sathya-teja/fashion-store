@@ -1,50 +1,63 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import API from "../utils/axios";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 export default function Login() {
-  const [formData, setFormData] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      const { data } = await API.post("/users/login", formData);
-      localStorage.setItem("userInfo", JSON.stringify(data)); // save user + token
-      navigate("/"); // redirect to home
+      const { data } = await axios.post("http://localhost:5000/api/users/login", {
+        email,
+        password,
+      });
+
+      localStorage.setItem("userInfo", JSON.stringify(data));
+
+      // 🔹 Trigger storage event for WishlistContext
+      window.dispatchEvent(new Event("storage"));
+
+      toast.success("Logged in successfully");
+      navigate("/");
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
+      toast.error(err.response?.data?.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-10 p-6 border rounded shadow">
-      <h1 className="text-2xl font-bold mb-4">Login</h1>
-      {error && <p className="text-red-500">{error}</p>}
+    <div className="max-w-md mx-auto p-6 bg-white shadow rounded-lg mt-10">
+      <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="email"
-          name="email"
           placeholder="Email"
-          value={formData.email}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-accent outline-none"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
         />
         <input
           type="password"
-          name="password"
           placeholder="Password"
-          value={formData.password}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-accent outline-none"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
         />
-        <button type="submit" className="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">
-          Login
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-accent text-white py-2 rounded-lg shadow hover:opacity-90 transition disabled:opacity-50"
+        >
+          {loading ? "Logging in..." : "Login"}
         </button>
       </form>
     </div>

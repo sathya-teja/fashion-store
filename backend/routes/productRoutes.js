@@ -21,6 +21,9 @@ router.get("/", async (req, res) => {
       page = 1,
       limit = 12,
       sort = "-createdAt", // newest first
+      minPrice,
+      maxPrice,
+      tag,
     } = req.query;
 
     let filter = {};
@@ -31,6 +34,16 @@ router.get("/", async (req, res) => {
     if (season) filter.season = new RegExp(`^${season}$`, "i");
     if (featured) filter.isFeatured = featured === "true";
     if (bestseller) filter.isBestseller = bestseller === "true";
+
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
+
+    if (tag) {
+      filter.tags = { $in: [new RegExp(tag, "i")] };
+    }
 
     if (search) {
       filter.$or = [
@@ -63,19 +76,33 @@ router.get("/", async (req, res) => {
 });
 
 /**
+ * @desc    Get unique categories/filters (for frontend filters)
+ * @route   GET /api/products/categories
+ * @access  Public
+ */
+router.get("/categories", async (req, res) => {
+  try {
+    const genders = await Product.distinct("gender");
+    const types = await Product.distinct("type");
+    const styles = await Product.distinct("style");
+    const seasons = await Product.distinct("season");
+    const tags = await Product.distinct("tags");
+
+    res.json({ genders, types, styles, seasons, tags });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
  * @desc    Get single product by ID (with reviews + summary)
  * @route   GET /api/products/:id
  */
 router.get("/:id", async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id).populate(
-      "reviews.user",
-      "name"
-    );
-
+    const product = await Product.findById(req.params.id).populate("reviews.user", "name");
     if (!product) return res.status(404).json({ message: "Product not found" });
 
-    // ✅ Build review summary
     const summary = [1, 2, 3, 4, 5].map((star) => ({
       star,
       count: product.reviews.filter((r) => r.rating === star).length,
@@ -93,6 +120,33 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+/**
+ * @desc    Get similar products
+ * @route   GET /api/products/:id/similar
+ */
+router.get("/:id/similar", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    const similar = await Product.find({
+      type: product.type,
+      gender: product.gender,
+      _id: { $ne: product._id },
+    })
+      .limit(8)
+      .select("name price discountPrice imageUrl sku");
+
+    res.json(similar);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * Admin product CRUD below (create, bulk, update, stock, delete)
+ */
 
 /**
  * @desc    Create a new product (Admin only)
@@ -127,15 +181,8 @@ router.post("/bulk", protect, admin, async (req, res) => {
  */
 router.put("/:id", protect, admin, async (req, res) => {
   try {
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-
-    if (!updatedProduct)
-      return res.status(404).json({ message: "Product not found" });
-
+    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedProduct) return res.status(404).json({ message: "Product not found" });
     res.json(updatedProduct);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -150,7 +197,6 @@ router.patch("/:id/stock", protect, admin, async (req, res) => {
   try {
     const { countInStock } = req.body;
     const product = await Product.findById(req.params.id);
-
     if (!product) return res.status(404).json({ message: "Product not found" });
 
     product.countInStock = countInStock;
@@ -169,8 +215,7 @@ router.patch("/:id/stock", protect, admin, async (req, res) => {
 router.delete("/:id", protect, admin, async (req, res) => {
   try {
     const deletedProduct = await Product.findByIdAndDelete(req.params.id);
-    if (!deletedProduct)
-      return res.status(404).json({ message: "Product not found" });
+    if (!deletedProduct) return res.status(404).json({ message: "Product not found" });
 
     res.json({ message: "Product deleted successfully" });
   } catch (error) {
