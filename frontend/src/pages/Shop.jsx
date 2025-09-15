@@ -35,7 +35,7 @@ const Shop = () => {
     try {
       setLoading(true);
 
-      let url = "http://localhost:5000/api/products?";
+      let url = "/products?";
       const queryString = Object.entries(filters)
         .filter(([key, value]) => key !== "search" && value)
         .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
