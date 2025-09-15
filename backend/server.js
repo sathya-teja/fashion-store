@@ -15,10 +15,11 @@ const app = express();
 
 // ----------------- Middlewares -----------------
 
-// ✅ CORS: allow frontend URLs
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:5173"], // adjust if needed
+    origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
