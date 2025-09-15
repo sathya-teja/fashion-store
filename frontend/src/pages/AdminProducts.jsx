@@ -1,6 +1,6 @@
 // AdminProducts.jsx
 import { useEffect, useState } from "react";
-import axios from "axios";
+import API from "../utils/axios";
 import {
   Container,
   Typography,
@@ -63,7 +63,7 @@ export default function AdminProducts() {
 
   const fetchProducts = async () => {
     try {
-      const { data } = await axios.get("http://localhost:5000/api/products");
+      const { data } = await API.get("/products");
       setProducts(data.products);
     } catch (err) {
       toast.error("Failed to fetch products");
@@ -98,14 +98,14 @@ export default function AdminProducts() {
   const handleSave = async () => {
     try {
       if (editing) {
-        await axios.put(
-          `http://localhost:5000/api/products/${editing}`,
+        await API.put(
+          `/products/${editing}`,
           form,
           { headers: { Authorization: `Bearer ${userInfo.token}` } }
         );
         toast.success("Product updated!");
       } else {
-        await axios.post("http://localhost:5000/api/products", form, {
+        await API.post("/products", form, {
           headers: { Authorization: `Bearer ${userInfo.token}` },
         });
         toast.success("Product created!");
@@ -119,7 +119,7 @@ export default function AdminProducts() {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/api/products/${id}`, {
+      await API.delete(`/products/${id}`, {
         headers: { Authorization: `Bearer ${userInfo.token}` },
       });
       toast.success("Product deleted!");

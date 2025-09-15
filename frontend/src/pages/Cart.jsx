@@ -16,7 +16,7 @@ import {
   Chip,
 } from "@mui/material";
 import { Add, Remove, Delete, LocalOffer } from "@mui/icons-material";
-import axios from "axios";
+import API from "../utils/axios";
 import { toast } from "react-toastify";
 
 export default function Cart() {
@@ -65,8 +65,8 @@ export default function Cart() {
     if (!couponCode.trim()) return toast.error("Enter a coupon code");
     try {
       setLoadingCoupon(true);
-      await axios.post(
-        "http://localhost:5000/api/cart/apply-coupon",
+      await API.post(
+        "/cart/apply-coupon",
         { code: couponCode },
         { headers: { Authorization: `Bearer ${userInfo.token}` } }
       );
@@ -83,8 +83,8 @@ export default function Cart() {
   // ✅ Remove Coupon
   const handleRemoveCoupon = async () => {
     try {
-      await axios.post(
-        "http://localhost:5000/api/cart/remove-coupon",
+      await API.post(
+        "/cart/remove-coupon",
         {},
         { headers: { Authorization: `Bearer ${userInfo.token}` } }
       );

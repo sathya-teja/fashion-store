@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useCart } from "../context/CartContext";
-import axios from "axios";
+import API from "../utils/axios";
 import { FaUser, FaCreditCard, FaCalendarAlt, FaLock } from "react-icons/fa";
 import { MdPayment } from "react-icons/md";
 
@@ -72,8 +72,8 @@ const MockPayment = () => {
           const orderedItems = [...cart.items];
 
           // ✅ Save order to backend
-          await axios.post(
-            "http://localhost:5000/api/orders",
+          await API.post(
+            "/orders",
             {
               orderItems: orderedItems.map((i) => ({
                 product: i.product._id,

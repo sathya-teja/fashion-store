@@ -1,4 +1,4 @@
-// Checkout.jsx (Refined E-commerce Style)
+// Checkout.jsx (Refined E-commerce Style with Validation & Guards)
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -11,10 +11,12 @@ import {
 } from "react-icons/fa";
 import { MdLocalShipping } from "react-icons/md";
 import { RiBillLine } from "react-icons/ri";
+import { toast } from "react-toastify";
 
 const Checkout = () => {
   const { cart } = useCart();
   const navigate = useNavigate();
+  const userInfo = JSON.parse(localStorage.getItem("userInfo"));
 
   const [shipping, setShipping] = useState({
     fullName: "",
@@ -23,6 +25,29 @@ const Checkout = () => {
     city: "",
     postalCode: "",
   });
+
+  // ✅ Guards
+  if (!userInfo) {
+    return (
+      <div className="text-center mt-6">
+        <p className="text-gray-600">Please log in to continue to checkout.</p>
+        <button
+          onClick={() => navigate("/login")}
+          className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+        >
+          Go to Login
+        </button>
+      </div>
+    );
+  }
+
+  if (!cart.items?.length) {
+    return (
+      <p className="text-center mt-6 text-gray-500">
+        Your cart is empty 🛒
+      </p>
+    );
+  }
 
   const totalPrice = cart.items.reduce(
     (acc, item) => acc + item.product.price * item.quantity,
@@ -36,6 +61,7 @@ const Checkout = () => {
   const handleProceedToPayment = (e) => {
     e.preventDefault();
 
+    // ✅ Validations
     if (
       !shipping.fullName ||
       !shipping.phone ||
@@ -43,10 +69,21 @@ const Checkout = () => {
       !shipping.city ||
       !shipping.postalCode
     ) {
-      alert("Please fill in all shipping details");
+      toast.error("Please fill in all shipping details");
       return;
     }
 
+    if (!/^\d{10}$/.test(shipping.phone)) {
+      toast.error("Please enter a valid 10-digit phone number");
+      return;
+    }
+
+    if (!/^\d{5,6}$/.test(shipping.postalCode)) {
+      toast.error("Please enter a valid postal code");
+      return;
+    }
+
+    // ✅ Navigate to payment
     navigate("/mock-payment", {
       state: { totalAmount: totalPrice, shipping },
     });
@@ -72,7 +109,6 @@ const Checkout = () => {
           </h3>
 
           <div className="space-y-5">
-            {/* Floating input fields */}
             {[
               { name: "fullName", label: "Full Name", icon: <FaUser /> },
               { name: "phone", label: "Phone Number", icon: <FaPhone /> },
@@ -104,27 +140,22 @@ const Checkout = () => {
             Order Summary
           </h3>
 
-          {cart.items.length === 0 ? (
-            <p className="text-gray-500">Your cart is empty</p>
-          ) : (
-            <ul className="mb-6 divide-y">
-              {cart.items.map((item) => (
-                <li
-                  key={item.product._id}
-                  className="flex justify-between py-3 text-sm sm:text-base"
-                >
-                  <span className="text-gray-700">
-                    {item.product.name} × {item.quantity}
-                  </span>
-                  <span className="font-semibold text-gray-800">
-                    ₹{item.product.price * item.quantity}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <ul className="mb-6 divide-y">
+            {cart.items.map((item) => (
+              <li
+                key={item.product._id}
+                className="flex justify-between py-3 text-sm sm:text-base"
+              >
+                <span className="text-gray-700">
+                  {item.product.name} × {item.quantity}
+                </span>
+                <span className="font-semibold text-gray-800">
+                  ₹{item.product.price * item.quantity}
+                </span>
+              </li>
+            ))}
+          </ul>
 
-          {/* Totals */}
           <div className="flex justify-between text-gray-600 mb-2">
             <span>Subtotal</span>
             <span>₹{totalPrice}</span>
@@ -138,7 +169,7 @@ const Checkout = () => {
             <span>₹{totalPrice}</span>
           </div>
 
-          {/* ✅ Desktop Button */}
+          {/* Desktop Button */}
           <div className="hidden lg:block">
             <button
               type="submit"
@@ -150,7 +181,7 @@ const Checkout = () => {
         </div>
       </form>
 
-      {/* ✅ Mobile Fixed Button */}
+      {/* Mobile Fixed Button */}
       <div className="lg:hidden fixed bottom-16 left-0 right-0 bg-white border-t shadow p-4">
         <div className="flex justify-between items-center mb-3">
           <span className="font-semibold">Total</span>

@@ -1,10 +1,24 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate , Link } from "react-router-dom";
 import API from "../utils/axios";
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  Paper,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { toast } from "react-toastify";
 
 export default function Register() {
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
-  const [error, setError] = useState("");
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -13,48 +27,95 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const { data } = await API.post("/users/register", formData);
-      localStorage.setItem("userInfo", JSON.stringify(data)); // save user + token
-      navigate("/"); // redirect to home
+
+      localStorage.setItem("userInfo", JSON.stringify(data));
+      window.dispatchEvent(new Event("storage")); // keep contexts synced
+
+      toast.success("Account created successfully 🎉");
+      navigate("/");
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed");
+      toast.error(err.response?.data?.message || "Registration failed ❌");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-10 p-6 border rounded shadow">
-      <h1 className="text-2xl font-bold mb-4">Register</h1>
-      {error && <p className="text-red-500">{error}</p>}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="text"
-          name="name"
-          placeholder="Name"
-          value={formData.name}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
-        />
-        <input
-          type="email"
-          name="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
-        />
-        <input
-          type="password"
-          name="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
-        />
-        <button type="submit" className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
-          Register
-        </button>
-      </form>
-    </div>
+    <Container maxWidth="sm" sx={{ mt: 10 }}>
+      <Paper elevation={3} sx={{ p: 4, borderRadius: 3 }}>
+        <Typography
+          variant="h5"
+          fontWeight="bold"
+          textAlign="center"
+          gutterBottom
+        >
+          Create Account
+        </Typography>
+
+        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
+          <TextField
+            label="Full Name"
+            name="name"
+            type="text"
+            fullWidth
+            required
+            margin="normal"
+            value={formData.name}
+            onChange={handleChange}
+          />
+
+          <TextField
+            label="Email"
+            name="email"
+            type="email"
+            fullWidth
+            required
+            margin="normal"
+            value={formData.email}
+            onChange={handleChange}
+          />
+
+          <TextField
+            label="Password"
+            name="password"
+            type="password"
+            fullWidth
+            required
+            margin="normal"
+            value={formData.password}
+            onChange={handleChange}
+          />
+
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            sx={{ mt: 3 }}
+            disabled={loading}
+          >
+            {loading ? (
+              <CircularProgress size={24} sx={{ color: "white" }} />
+            ) : (
+              "Register"
+            )}
+          </Button>
+        </Box>
+        {/* ✅ Register link */}
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          textAlign="center"
+          sx={{ mt: 3 }}
+        >
+          Don’t have an account?{" "}
+          <Link to="/login" style={{ color: "#4F46E5", fontWeight: "bold" }}>
+            Login
+          </Link>
+        </Typography>
+      </Paper>
+    </Container>
   );
 }

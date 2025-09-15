@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import { Heart, Tag } from "lucide-react";
 import { useWishlist } from "../context/WishlistContext"; // ✅ import wishlist context
+import API from "../utils/axios"; // ✅ import custom axios instance
 
 import "swiper/css";
 
@@ -19,8 +19,8 @@ export default function Home() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const { data } = await axios.get(
-          "http://localhost:5000/api/products?featured=true&limit=8"
+        const { data } = await API.get(
+          "/products?featured=true&limit=8"
         );
         setProducts(data.products || []);
         setLoading(false);

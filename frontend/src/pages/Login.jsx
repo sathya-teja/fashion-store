@@ -1,7 +1,17 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { useNavigate, Link } from "react-router-dom"; // ✅ Added Link
 import { toast } from "react-toastify";
+import API from "../utils/axios";
+
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  TextField,
+  Typography,
+  Paper,
+} from "@mui/material";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -12,54 +22,83 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-      const { data } = await axios.post("http://localhost:5000/api/users/login", {
-        email,
-        password,
-      });
+      const { data } = await API.post("/users/login", { email, password });
 
       localStorage.setItem("userInfo", JSON.stringify(data));
+      window.dispatchEvent(new Event("storage")); // 🔄 sync wishlist/cart contexts
 
-      // 🔹 Trigger storage event for WishlistContext
-      window.dispatchEvent(new Event("storage"));
-
-      toast.success("Logged in successfully");
+      toast.success("Logged in successfully 🎉");
       navigate("/");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Login failed");
+      toast.error(err.response?.data?.message || "Login failed ❌");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white shadow rounded-lg mt-10">
-      <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="email"
-          placeholder="Email"
-          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-accent outline-none"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-accent outline-none"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-accent text-white py-2 rounded-lg shadow hover:opacity-90 transition disabled:opacity-50"
+    <Container maxWidth="sm" sx={{ mt: 10 }}>
+      <Paper elevation={3} sx={{ p: 4, borderRadius: 3 }}>
+        <Typography
+          variant="h5"
+          fontWeight="bold"
+          textAlign="center"
+          gutterBottom
         >
-          {loading ? "Logging in..." : "Login"}
-        </button>
-      </form>
-    </div>
+          Login
+        </Typography>
+
+        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
+          <TextField
+            label="Email"
+            type="email"
+            fullWidth
+            required
+            margin="normal"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <TextField
+            label="Password"
+            type="password"
+            fullWidth
+            required
+            margin="normal"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            sx={{ mt: 3, py: 1.5, fontWeight: "bold" }}
+            disabled={loading}
+          >
+            {loading ? (
+              <CircularProgress size={24} sx={{ color: "white" }} />
+            ) : (
+              "Login"
+            )}
+          </Button>
+        </Box>
+
+        {/* ✅ Register link */}
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          textAlign="center"
+          sx={{ mt: 3 }}
+        >
+          Don’t have an account?{" "}
+          <Link to="/register" style={{ color: "#4F46E5", fontWeight: "bold" }}>
+            Register
+          </Link>
+        </Typography>
+      </Paper>
+    </Container>
   );
 }

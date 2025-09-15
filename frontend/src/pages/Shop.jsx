@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Heart, Tag, SlidersHorizontal, X, Star } from "lucide-react";
 import { useWishlist } from "../context/WishlistContext";
+import API from "../utils/axios";
 
 const Shop = () => {
   const [products, setProducts] = useState([]);
@@ -42,7 +43,7 @@ const Shop = () => {
 
       if (queryString) url += queryString;
 
-      const { data } = await axios.get(url);
+      const { data } = await API.get(url);
       let results = data.products || [];
 
       // ✅ frontend search filter

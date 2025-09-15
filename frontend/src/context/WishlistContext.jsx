@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import axios from "axios";
 import { toast } from "react-toastify";
+import API from "../utils/axios";
 
 const WishlistContext = createContext();
 export const useWishlist = () => useContext(WishlistContext);
@@ -18,10 +18,10 @@ export const WishlistProvider = ({ children }) => {
       return;
     }
     try {
-      const { data } = await axios.get("http://localhost:5000/api/wishlist", {
+      const { data } = await API.get("/wishlist", {
         headers: { Authorization: `Bearer ${userInfo.token}` },
       });
-      setWishlist(data);
+      setWishlist(data.wishlist ?? data ?? []);
     } catch {
       setWishlist([]);
     } finally {
@@ -44,12 +44,12 @@ export const WishlistProvider = ({ children }) => {
     );
 
     try {
-      const { data } = await axios.post(
-        `http://localhost:5000/api/wishlist/${productId}`,
+      const { data } = await API.post(
+        `/wishlist/${productId}`,
         {},
         { headers: { Authorization: `Bearer ${userInfo.token}` } }
       );
-      setWishlist(data.wishlist);
+      setWishlist(data.wishlist ?? data ?? []);
       toast.success("Added to wishlist ❤️");
     } catch {
       fetchWishlist();
@@ -61,11 +61,10 @@ export const WishlistProvider = ({ children }) => {
   const removeFromWishlist = async (productId) => {
     setWishlist((prev) => prev.filter((p) => p._id !== productId));
     try {
-      const { data } = await axios.delete(
-        `http://localhost:5000/api/wishlist/${productId}`,
-        { headers: { Authorization: `Bearer ${userInfo.token}` } }
-      );
-      setWishlist(data.wishlist);
+      const { data } = await API.delete(`/wishlist/${productId}`, {
+        headers: { Authorization: `Bearer ${userInfo.token}` },
+      });
+      setWishlist(data.wishlist ?? data ?? []);
       toast.info("Removed from wishlist");
     } catch {
       fetchWishlist();

@@ -1,5 +1,8 @@
+// AdminOrders.jsx
 import { useEffect, useState, useMemo } from "react";
 import { FaUser, FaRupeeSign, FaSearch } from "react-icons/fa";
+import API from "../utils/axios"; // ✅ use centralized axios instance
+import { toast } from "react-toastify";
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState([]);
@@ -17,8 +20,9 @@ const AdminOrders = () => {
     } catch {
       return null;
     }
-  }, []); // only parse once
+  }, []);
 
+  // ✅ Fetch Orders
   useEffect(() => {
     const fetchOrders = async () => {
       if (!userInfo?.isAdmin) {
@@ -27,27 +31,22 @@ const AdminOrders = () => {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/orders", {
+        const { data } = await API.get("/orders", {
           headers: { Authorization: `Bearer ${userInfo.token}` },
         });
 
-        if (!res.ok) {
-          throw new Error(`Failed to fetch orders (${res.status})`);
-        }
-
-        const data = await res.json();
         const ordersArray = Array.isArray(data) ? data : data.orders || [];
         setOrders(ordersArray);
         setFilteredOrders(ordersArray);
       } catch (err) {
-        setError(err.message || "Unexpected error fetching orders.");
+        setError(err.response?.data?.message || "Unexpected error fetching orders.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchOrders();
-  }, [userInfo?.token]); // ✅ only re-run if token changes
+  }, [userInfo?.token]);
 
   // ✅ Debounced filtering
   useEffect(() => {
@@ -72,31 +71,25 @@ const AdminOrders = () => {
     return () => clearTimeout(timer);
   }, [searchTerm, statusFilter, orders]);
 
-  // ✅ Status update logic unchanged
+  // ✅ Update Status
   const updateStatus = async (orderId, status) => {
     try {
-      const res = await fetch(
-        `http://localhost:5000/api/orders/${orderId}/status`,
+      await API.put(
+        `/orders/${orderId}/status`,
+        { status },
         {
-          method: "PUT",
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${userInfo?.token || ""}`,
           },
-          body: JSON.stringify({ status }),
         }
       );
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to update status");
-      }
 
       setOrders((prev) =>
         prev.map((o) => (o._id === orderId ? { ...o, status } : o))
       );
+      toast.success("Order status updated");
     } catch (err) {
-      alert(err.message);
+      toast.error(err.response?.data?.message || "Failed to update status");
     }
   };
 

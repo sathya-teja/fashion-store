@@ -56,7 +56,7 @@ function App() {
         </div>
 
         {/* ✅ Global Footer */}
-        {/* <Footer /> */}
+        <Footer />
 
         {/* ✅ Global Bottom Navigation (mobile only) */}
         <BottomNav />

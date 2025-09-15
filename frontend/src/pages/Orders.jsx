@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FaBox, FaRupeeSign, FaTruck } from "react-icons/fa";
+import API from "../utils/axios";
 
 const Orders = () => {
   const [orders, setOrders] = useState([]);
@@ -9,14 +10,14 @@ const Orders = () => {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/orders/myorders", {
+        const { data } = await API.get("/orders/myorders", {
           headers: { Authorization: `Bearer ${userInfo.token}` },
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to fetch orders");
         setOrders(data);
       } catch (err) {
-        setError(err.message);
+        setError(
+          err.response?.data?.message || "Failed to fetch orders"
+        );
       }
     };
 

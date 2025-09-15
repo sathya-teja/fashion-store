@@ -1,4 +1,3 @@
-// Profile.jsx (Myntra-style with Loyalty, Verification, Last Login)
 import { useEffect, useState } from "react";
 import {
   Box,
@@ -28,6 +27,8 @@ import {
   Verified,
 } from "@mui/icons-material";
 import { useNavigate, Link } from "react-router-dom";
+import { toast } from "react-toastify";
+import API from "../utils/axios"; // ✅ use axios instance
 
 export default function Profile() {
   const userInfo = JSON.parse(localStorage.getItem("userInfo") || "null");
@@ -48,6 +49,7 @@ export default function Profile() {
     password: "",
   });
 
+  // ✅ Fetch profile
   useEffect(() => {
     const fetchProfile = async () => {
       if (!userInfo) {
@@ -55,22 +57,19 @@ export default function Profile() {
         return;
       }
       try {
-        const res = await fetch("http://localhost:5000/api/users/profile", {
+        const { data } = await API.get("/users/profile", {
           headers: { Authorization: `Bearer ${userInfo.token}` },
         });
-        const data = await res.json();
-        if (res.ok) {
-          setProfile({
-            name: data.name,
-            email: data.email,
-            loyaltyPoints: data.loyaltyPoints || 0,
-            isVerified: data.isVerified || false,
-            lastLogin: data.lastLogin || null,
-          });
-          setEditProfile({ name: data.name, email: data.email, password: "" });
-        }
+        setProfile({
+          name: data.name,
+          email: data.email,
+          loyaltyPoints: data.loyaltyPoints || 0,
+          isVerified: data.isVerified || false,
+          lastLogin: data.lastLogin || null,
+        });
+        setEditProfile({ name: data.name, email: data.email, password: "" });
       } catch (err) {
-        console.error("Failed to load profile", err);
+        toast.error("❌ Failed to load profile");
       } finally {
         setLoading(false);
       }
@@ -78,33 +77,31 @@ export default function Profile() {
     fetchProfile();
   }, [userInfo, navigate]);
 
+  // ✅ Logout
   const handleLogout = () => {
     localStorage.removeItem("userInfo");
     navigate("/login");
   };
 
+  // ✅ Update Profile
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch("http://localhost:5000/api/users/profile", {
-        method: "PUT",
+      const { data } = await API.put("/users/profile", editProfile, {
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${userInfo.token}`,
         },
-        body: JSON.stringify(editProfile),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Could not update");
       localStorage.setItem("userInfo", JSON.stringify(data));
       setProfile((prev) => ({
         ...prev,
         name: data.name,
         email: data.email,
       }));
+      toast.success("✅ Profile updated successfully");
       setOpenDialog(false);
     } catch (err) {
-      alert("❌ " + err.message);
+      toast.error("❌ " + (err.response?.data?.message || "Update failed"));
     }
   };
 
@@ -131,7 +128,7 @@ export default function Profile() {
     );
 
   return (
-    <Container maxWidth="sm" sx={{ py: 3, pb: 10 }} >
+    <Container maxWidth="sm" sx={{ py: 3, pb: 10 }}>
       {/* Header */}
       <Box textAlign="center" mb={3}>
         <Avatar
@@ -153,21 +150,32 @@ export default function Profile() {
           Loyalty Points: {profile.loyaltyPoints}
         </Typography>
         {profile.isVerified ? (
-          <Typography color="primary" display="flex" justifyContent="center" alignItems="center" gap={1}>
+          <Typography
+            color="primary"
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            gap={1}
+          >
             <Verified fontSize="small" /> Verified
           </Typography>
         ) : (
           <Typography color="error">Not Verified</Typography>
         )}
         {profile.lastLogin && (
-          <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            mt={1}
+          >
             Last login: {new Date(profile.lastLogin).toLocaleString()}
           </Typography>
         )}
       </Box>
 
       {/* Options List */}
-      <List sx={{ bgcolor: "white", borderRadius: 1 }}>
+      <List sx={{ bgcolor: "white", borderRadius: 2, boxShadow: 1 }}>
         <ListItem button component={Link} to="/orders">
           <ListItemIcon>
             <ShoppingBag color="primary" />
@@ -190,7 +198,10 @@ export default function Profile() {
           <ListItemIcon>
             <LocationOn color="success" />
           </ListItemIcon>
-          <ListItemText primary="Addresses" secondary="Manage shipping addresses" />
+          <ListItemText
+            primary="Addresses"
+            secondary="Manage shipping addresses"
+          />
           <ChevronRight />
         </ListItem>
         <Divider />
@@ -211,7 +222,10 @@ export default function Profile() {
           <ListItemIcon>
             <Settings color="action" />
           </ListItemIcon>
-          <ListItemText primary="Account Settings" secondary="Edit profile details" />
+          <ListItemText
+            primary="Account Settings"
+            secondary="Edit profile details"
+          />
           <ChevronRight />
         </ListItem>
         <Divider />
@@ -226,7 +240,12 @@ export default function Profile() {
       </List>
 
       {/* Edit Profile Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="sm">
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>Edit Profile</DialogTitle>
         <DialogContent>
           <Box component="form" onSubmit={handleUpdate} sx={{ mt: 2 }}>
@@ -236,7 +255,9 @@ export default function Profile() {
               label="Name"
               name="name"
               value={editProfile.name}
-              onChange={(e) => setEditProfile({ ...editProfile, name: e.target.value })}
+              onChange={(e) =>
+                setEditProfile({ ...editProfile, name: e.target.value })
+              }
             />
             <TextField
               fullWidth
@@ -244,7 +265,9 @@ export default function Profile() {
               label="Email"
               name="email"
               value={editProfile.email}
-              onChange={(e) => setEditProfile({ ...editProfile, email: e.target.value })}
+              onChange={(e) =>
+                setEditProfile({ ...editProfile, email: e.target.value })
+              }
             />
             <TextField
               fullWidth
@@ -252,9 +275,16 @@ export default function Profile() {
               label="New Password"
               type="password"
               value={editProfile.password}
-              onChange={(e) => setEditProfile({ ...editProfile, password: e.target.value })}
+              onChange={(e) =>
+                setEditProfile({ ...editProfile, password: e.target.value })
+              }
             />
-            <Button type="submit" fullWidth variant="contained" sx={{ mt: 2 }}>
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              sx={{ mt: 2 }}
+            >
               Save Changes
             </Button>
           </Box>

@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import API from "../utils/axios";
 import { useCart } from "../context/CartContext";
 import { toast } from "react-toastify";
 import { FavoriteBorder, Favorite, ShoppingBag } from "@mui/icons-material";
@@ -49,8 +50,8 @@ export default function ProductDetails() {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const { data } = await axios.get(
-          `http://localhost:5000/api/products/${id}`
+        const { data } = await API.get(
+          `/products/${id}`
         );
         setProduct(data);
         setMainImage(data.imageUrl || "");
@@ -68,8 +69,8 @@ export default function ProductDetails() {
     if (!product?.gender) return;
     const fetchRelated = async () => {
       try {
-        const { data } = await axios.get(
-          `http://localhost:5000/api/products?gender=${product.gender}&limit=6`
+        const { data } = await API.get(
+          `/products?gender=${product.gender}&limit=6`
         );
         setRelated((data.products || []).filter((p) => p._id !== product._id));
       } catch (err) {
@@ -117,8 +118,8 @@ export default function ProductDetails() {
     }
     try {
       setSubmitting(true);
-      const { data: newReview } = await axios.post(
-        `http://localhost:5000/api/reviews/${id}`,
+      const { data: newReview } = await API.post(
+        `/reviews/${id}`,
         { rating, comment },
         { headers: { Authorization: `Bearer ${userInfo.token}` } }
       );
