@@ -19,7 +19,7 @@ router.get("/", async (req, res) => {
       featured,
       bestseller,
       page = 1,
-      limit = 12,
+      limit,
       sort = "-createdAt", // newest first
       minPrice,
       maxPrice,
