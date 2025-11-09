@@ -1,4 +1,4 @@
-// Cart.jsx (Updated Professional UI)
+// Cart.jsx (Updated Professional UI — defensive rendering)
 import { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useNavigate } from "react-router-dom";
@@ -28,11 +28,11 @@ export default function Cart() {
   const [couponCode, setCouponCode] = useState("");
   const [loadingCoupon, setLoadingCoupon] = useState(false);
 
-  // ✅ Fetch cart once on mount if user is logged in
-  useEffect(() => {
-    if (userInfo) fetchCart();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userInfo]);
+  // // ✅ Fetch cart once on mount if user is logged in
+  // useEffect(() => {
+  //   if (userInfo) fetchCart();
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [userInfo]);
 
   if (!userInfo)
     return (
@@ -48,15 +48,18 @@ export default function Cart() {
       </Box>
     );
 
-  if (!cart || !cart.items?.length)
+  // Defensive: normalize items array and remove falsy entries
+  const items = Array.isArray(cart?.items) ? cart.items.filter(Boolean) : [];
+
+  if (!items.length)
     return (
       <Typography align="center" sx={{ mt: 6, color: "text.secondary" }}>
         Your cart is empty 🛒
       </Typography>
     );
 
-  const total = cart.total ?? 0;
-  const subtotal = cart.subtotal ?? 0;
+  const total = cart?.total ?? 0;
+  const subtotal = cart?.subtotal ?? 0;
   const discount =
     subtotal && total && subtotal > total ? subtotal - total : 0;
 
@@ -72,7 +75,7 @@ export default function Cart() {
       );
       toast.success("Coupon applied!");
       setCouponCode("");
-      fetchCart(); // fetch only once after applying coupon
+      await fetchCart(); // refresh server-populated data
     } catch (err) {
       toast.error(err.response?.data?.message || "Invalid coupon");
     } finally {
@@ -89,117 +92,181 @@ export default function Cart() {
         { headers: { Authorization: `Bearer ${userInfo.token}` } }
       );
       toast.info("Coupon removed");
-      fetchCart();
+      await fetchCart();
     } catch (err) {
       toast.error("Failed to remove coupon");
     }
   };
 
   return (
-    <Box sx={{ maxWidth: "1200px", mx: "auto", p: { xs: 2, md: 4 }, mt: 2 }} >
+    <Box sx={{ maxWidth: "1200px", mx: "auto", p: { xs: 2, md: 4 }, mt: 2 }}>
       <Typography variant="h5" fontWeight="bold" gutterBottom>
-        Shopping Bag ({cart.items.length} items)
+        Shopping Bag ({items.length} items)
       </Typography>
 
       <Grid container spacing={3}>
         {/* Cart Items */}
         <Grid item xs={12} md={8}>
-          {cart.items.map((item) => (
-            <Paper
-              key={item._id}
-              sx={{
-                p: 2,
-                mb: 2,
-                display: "flex",
-                gap: 2,
-                border: "1px solid #eee",
-                borderRadius: 2,
-              }}
-            >
-              <Avatar
-                variant="rounded"
-                src={item.product.imageUrl}
-                alt={item.product.name}
-                sx={{
-                  width: { xs: 90, sm: 110 },
-                  height: { xs: 120, sm: 140 },
-                  flexShrink: 0,
-                  bgcolor: "#f9f9f9",
-                }}
-              />
+          {items.map((item, idx) => {
+            // defensive local refs
+            const product = item?.product ?? null;
+            const price = Number(item?.priceAtTime ?? product?.price ?? 0);
+            const qty = Number(item?.quantity ?? 0);
+            const key = item?._id ?? product?._id ?? `cart-item-${idx}`;
 
-              <Box flex={1}>
-                <Typography fontWeight="bold" fontSize="1rem" noWrap>
-                  {item.product.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" mb={1}>
-                  ₹{item.product.price} each
-                </Typography>
-
-                {/* Size & Color */}
-                <Box display="flex" gap={1} mb={1}>
-                  {item.selectedSize && (
-                    <Chip label={`Size: ${item.selectedSize}`} size="small" />
-                  )}
-                  {item.selectedColor && (
-                    <Chip label={`Color: ${item.selectedColor}`} size="small" />
-                  )}
-                </Box>
-
-                {/* Quantity + Price */}
-                <Box
-                  mt={1}
-                  display="flex"
-                  justifyContent="space-between"
-                  alignItems="center"
+            // If product info missing, show fallback UI with option to remove
+            if (!product) {
+              return (
+                <Paper
+                  key={key}
+                  sx={{
+                    p: 2,
+                    mb: 2,
+                    display: "flex",
+                    gap: 2,
+                    border: "1px solid #eee",
+                    borderRadius: 2,
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
                 >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      border: "1px solid #ddd",
-                      borderRadius: "20px",
-                    }}
-                  >
-                    <IconButton
-                      size="small"
-                      onClick={() =>
-                        item.quantity > 1 &&
-                        updateQuantity(item._id, item.quantity - 1)
-                      }
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Avatar
+                      variant="rounded"
+                      sx={{
+                        width: 90,
+                        height: 90,
+                        flexShrink: 0,
+                        bgcolor: "#f9f9f9",
+                      }}
                     >
-                      <Remove fontSize="small" />
-                    </IconButton>
-                    <Typography sx={{ px: 2 }}>{item.quantity}</Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() =>
-                        updateQuantity(item._id, item.quantity + 1)
-                      }
-                    >
-                      <Add fontSize="small" />
-                    </IconButton>
+                      N/A
+                    </Avatar>
+                    <Box>
+                      <Typography fontWeight="bold" noWrap>
+                        Product unavailable
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" mb={1}>
+                        This product was removed from the store.
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Qty: {qty}
+                      </Typography>
+                    </Box>
                   </Box>
 
-                  <Typography fontWeight="bold" color="text.primary">
-                    ₹{item.product.price * item.quantity}
-                  </Typography>
-                </Box>
+                  <Box>
+                    <Button
+                      color="error"
+                      startIcon={<Delete />}
+                      onClick={() => removeFromCart(item._id)}
+                      size="small"
+                    >
+                      Remove
+                    </Button>
+                  </Box>
+                </Paper>
+              );
+            }
 
-                {/* Remove */}
-                <Box mt={1}>
-                  <Button
-                    color="error"
-                    startIcon={<Delete />}
-                    onClick={() => removeFromCart(item._id)}
-                    size="small"
+            // Normal product render
+            return (
+              <Paper
+                key={key}
+                sx={{
+                  p: 2,
+                  mb: 2,
+                  display: "flex",
+                  gap: 2,
+                  border: "1px solid #eee",
+                  borderRadius: 2,
+                }}
+              >
+                <Avatar
+                  variant="rounded"
+                  src={product?.imageUrl ?? ""}
+                  alt={product?.name ?? "Product"}
+                  sx={{
+                    width: { xs: 90, sm: 110 },
+                    height: { xs: 120, sm: 140 },
+                    flexShrink: 0,
+                    bgcolor: "#f9f9f9",
+                  }}
+                />
+
+                <Box flex={1}>
+                  <Typography fontWeight="bold" fontSize="1rem" noWrap>
+                    {product?.name ?? "Unnamed product"}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    ₹{price} each
+                  </Typography>
+
+                  {/* Size & Color */}
+                  <Box display="flex" gap={1} mb={1}>
+                    {item?.selectedSize && (
+                      <Chip label={`Size: ${item.selectedSize}`} size="small" />
+                    )}
+                    {item?.selectedColor && (
+                      <Chip
+                        label={`Color: ${item.selectedColor}`}
+                        size="small"
+                      />
+                    )}
+                  </Box>
+
+                  {/* Quantity + Price */}
+                  <Box
+                    mt={1}
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
                   >
-                    Remove
-                  </Button>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        border: "1px solid #ddd",
+                        borderRadius: "20px",
+                      }}
+                    >
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          qty > 1 && updateQuantity(item._id, qty - 1)
+                        }
+                      >
+                        <Remove fontSize="small" />
+                      </IconButton>
+                      <Typography sx={{ px: 2 }}>{qty}</Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => updateQuantity(item._id, qty + 1)}
+                      >
+                        <Add fontSize="small" />
+                      </IconButton>
+                    </Box>
+
+                    <Typography fontWeight="bold" color="text.primary">
+                      ₹{(price * qty).toFixed(0)}
+                    </Typography>
+                  </Box>
+
+                  {/* Remove */}
+                  <Box mt={1}>
+                    <Button
+                      color="error"
+                      startIcon={<Delete />}
+                      onClick={() => removeFromCart(item._id)}
+                      size="small"
+                    >
+                      Remove
+                    </Button>
+                  </Box>
                 </Box>
-              </Box>
-            </Paper>
-          ))}
+              </Paper>
+            );
+          })}
         </Grid>
 
         {/* Order Summary */}
@@ -247,7 +314,7 @@ export default function Cart() {
             </Box>
 
             {/* Coupon input */}
-            {!cart.coupon?.code ? (
+            {!cart?.coupon?.code ? (
               <Box
                 display="flex"
                 gap={1}

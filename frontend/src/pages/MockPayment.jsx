@@ -1,4 +1,4 @@
-// MockPayment.jsx (Fixed Clear Cart)
+// MockPayment.jsx (patched: server cart, priceAtPurchase, idempotency, fixed loading)
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -6,6 +6,9 @@ import { useCart } from "../context/CartContext";
 import API from "../utils/axios";
 import { FaUser, FaCreditCard, FaCalendarAlt, FaLock } from "react-icons/fa";
 import { MdPayment } from "react-icons/md";
+
+// Toggle this for deterministic dev testing (true => always succeed)
+const MOCK_PAYMENT_ALWAYS_SUCCESS = true;
 
 const MockPayment = () => {
   const { state } = useLocation();
@@ -29,13 +32,15 @@ const MockPayment = () => {
     );
   }
 
-  // ✅ validate mock payment form
+  // stricter validation: strip spaces and ensure digits where needed
   const validateForm = () => {
-    if (!cardNumber || !expiry || !cvv || !name) {
+    const cleanCard = cardNumber.replace(/\s+/g, "");
+    const cleanCvv = cvv.replace(/\s+/g, "");
+    if (!cleanCard || !expiry || !cleanCvv || !name) {
       setError("⚠️ All fields are required.");
       return false;
     }
-    if (cardNumber.length !== 16) {
+    if (!/^\d{16}$/.test(cleanCard)) {
       setError("⚠️ Card number must be 16 digits.");
       return false;
     }
@@ -43,7 +48,7 @@ const MockPayment = () => {
       setError("⚠️ Expiry must be in MM/YY format.");
       return false;
     }
-    if (cvv.length !== 3) {
+    if (!/^\d{3}$/.test(cleanCvv)) {
       setError("⚠️ CVV must be 3 digits.");
       return false;
     }
@@ -60,64 +65,91 @@ const MockPayment = () => {
     setError("");
     setLoading(true);
 
+    // small simulated delay for UX; keep loading true until network finishes
     setTimeout(async () => {
-      setLoading(false);
+      try {
+        // Determine success (dev toggle or random)
+        const isSuccess = MOCK_PAYMENT_ALWAYS_SUCCESS ? true : Math.random() > 0.2;
+        const transactionId = uuidv4();
+        const clientOrderRef = `COREF-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-      const isSuccess = Math.random() > 0.2; // 80% chance success
-      const transactionId = uuidv4();
-
-      if (isSuccess) {
-        try {
-          // ✅ Save current items before clearing
-          const orderedItems = [...cart.items];
-
-          // ✅ Save order to backend
-          await API.post(
-            "/orders",
-            {
-              orderItems: orderedItems.map((i) => ({
-                product: i.product._id,
-                quantity: i.quantity,
-              })),
-              shippingAddress: {
-                fullName: shipping.fullName,
-                address: shipping.address,
-                city: shipping.city,
-                postalCode: shipping.postalCode,
-                phone: shipping.phone,
-              },
-              totalPrice: totalAmount,
-              paymentInfo: {
-                method: "Mock Payment",
-                transactionId,
-                status: "Completed",
-              },
-            },
-            { headers: { Authorization: `Bearer ${userInfo.token}` } }
-          );
-
-          // ✅ Clear both backend & frontend cart
-          await clearCart();
-
-          // ✅ Pass saved items to confirmation page
-          navigate("/order-confirmation", {
-            state: {
-              transactionId,
-              amount: totalAmount,
-              shipping,
-              orderedItems,
-              status: "success",
-            },
-          });
-        } catch (err) {
-          setError(
-            err.response?.data?.message || "❌ Failed to save order in backend."
-          );
+        if (!isSuccess) {
+          setLoading(false);
+          setError("❌ Payment failed. Please try again.");
+          return;
         }
-      } else {
-        setError("❌ Payment failed. Please try again.");
+
+        // 1) Fetch authoritative / server cart immediately before creating order
+        const cartResp = await API.get("/cart", {
+          headers: { Authorization: `Bearer ${userInfo.token}` },
+        });
+        const serverCart = cartResp.data;
+        if (!serverCart || !serverCart.items || serverCart.items.length === 0) {
+          throw new Error("Cart is empty or unavailable.");
+        }
+
+        // 2) Build orderItems with price snapshot and attributes
+        const orderItems = serverCart.items.map((i) => ({
+          product: i.product._id ? i.product._id : i.product,
+          quantity: i.quantity,
+          selectedSize: i.selectedSize,
+          selectedColor: i.selectedColor,
+          priceAtPurchase: i.priceAtTime ?? (i.product && i.product.price) ?? 0,
+        }));
+
+        // 3) Prepare order body
+        const orderBody = {
+          clientOrderRef,
+          orderItems,
+          shippingAddress: {
+            fullName: shipping?.fullName ?? "",
+            address: shipping?.address ?? "",
+            city: shipping?.city ?? "",
+            postalCode: shipping?.postalCode ?? "",
+            phone: shipping?.phone ?? "",
+          },
+          subtotal: serverCart.subtotal ?? 0,
+          shippingPrice: serverCart.shippingPrice ?? 0,
+          taxPrice: serverCart.taxPrice ?? 0,
+          discount: serverCart.coupon?.discount ?? 0,
+          totalPrice: serverCart.total ?? totalAmount,
+          paymentInfo: {
+            method: "Mock Payment",
+            transactionId,
+            status: "Completed",
+            paidAt: new Date().toISOString(),
+            test: true,
+          },
+        };
+
+        // 4) Create order on backend and await result
+        const createResp = await API.post("/orders", orderBody, {
+          headers: { Authorization: `Bearer ${userInfo.token}` },
+        });
+
+        const createdOrder = createResp.data;
+
+        // 5) Clear both backend and frontend cart (your CartContext.clearCart handles server delete and local state)
+        await clearCart();
+
+        // 6) Navigate to confirmation — include created order id so confirmation page can fetch authoritative data
+        setLoading(false);
+        navigate("/order-confirmation", {
+          state: {
+            transactionId,
+            amount: orderBody.totalPrice,
+            shipping: orderBody.shippingAddress,
+            orderedItems: orderItems,
+            status: "success",
+            orderId: createdOrder._id,
+          },
+        });
+      } catch (err) {
+        console.error("Payment / order creation error:", err);
+        setLoading(false);
+        setError(err.response?.data?.message || err.message || "❌ Failed to create order.");
       }
-    }, 2000);
+    }, 700); // short UX delay
   };
 
   return (
@@ -127,25 +159,18 @@ const MockPayment = () => {
         <div className="flex flex-col items-center mb-6">
           <MdPayment className="text-green-600 text-4xl mb-2" />
           <h2 className="text-xl font-bold text-gray-800">Payment Details</h2>
-          <p className="text-gray-500 text-sm">Complete your purchase safely</p>
+          <p className="text-gray-500 text-sm">Complete your purchase (Mock)</p>
         </div>
 
         {/* Stepper */}
         <div className="flex justify-between items-center mb-6 text-xs font-medium">
           <span className="flex-1 text-center text-gray-400">Cart</span>
           <span className="flex-1 text-center text-gray-400">Shipping</span>
-          <span className="flex-1 text-center text-green-600 font-semibold">
-            Payment
-          </span>
+          <span className="flex-1 text-center text-green-600 font-semibold">Payment</span>
         </div>
 
-        {error && (
-          <p className="bg-red-100 text-red-700 p-2 rounded mb-4 text-sm">
-            {error}
-          </p>
-        )}
+        {error && <p className="bg-red-100 text-red-700 p-2 rounded mb-4 text-sm">{error}</p>}
 
-        {/* Payment Form */}
         <div className="space-y-4">
           <div className="relative">
             <FaUser className="absolute left-3 top-3 text-gray-400" />
@@ -162,9 +187,10 @@ const MockPayment = () => {
             <FaCreditCard className="absolute left-3 top-3 text-gray-400" />
             <input
               type="text"
+              inputMode="numeric"
               placeholder="Card Number"
               value={cardNumber}
-              onChange={(e) => setCardNumber(e.target.value)}
+              onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, ""))}
               maxLength="16"
               className="w-full border rounded-lg pl-10 pr-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
             />
@@ -188,7 +214,7 @@ const MockPayment = () => {
                 type="password"
                 placeholder="CVV"
                 value={cvv}
-                onChange={(e) => setCvv(e.target.value)}
+                onChange={(e) => setCvv(e.target.value.replace(/\D/g, ""))}
                 maxLength="3"
                 className="w-full border rounded-lg pl-10 pr-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
               />
@@ -203,25 +229,9 @@ const MockPayment = () => {
           >
             {loading ? (
               <>
-                <svg
-                  className="animate-spin h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8H4z"
-                  ></path>
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>
                 Processing...
               </>
@@ -231,10 +241,7 @@ const MockPayment = () => {
           </button>
         </div>
 
-        {/* Security Note */}
-        <p className="text-xs text-gray-400 mt-4 text-center">
-          🔒 Your payment is secured and encrypted.
-        </p>
+        <p className="text-xs text-gray-400 mt-4 text-center">🔒 This is a mock payment (no money will be charged).</p>
       </div>
     </div>
   );

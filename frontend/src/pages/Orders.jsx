@@ -15,9 +15,7 @@ const Orders = () => {
         });
         setOrders(data);
       } catch (err) {
-        setError(
-          err.response?.data?.message || "Failed to fetch orders"
-        );
+        setError(err?.response?.data?.message || "Failed to fetch orders");
       }
     };
 
@@ -35,6 +33,37 @@ const Orders = () => {
   if (error) {
     return <p className="text-center mt-10 text-red-600">{error}</p>;
   }
+
+  // helper to render a safe product object from possible shapes (populated object, id string, or null)
+  const normalizeProduct = (prod) => {
+    // if prod is null/undefined
+    if (!prod) {
+      return {
+        _id: null,
+        name: "Product no longer available",
+        price: 0,
+        imageUrl: "/images/placeholder.png",
+      };
+    }
+
+    // if prod is an object with fields
+    if (typeof prod === "object") {
+      return {
+        _id: prod._id ?? prod.id ?? null,
+        name: prod.name ?? prod.title ?? "Unnamed product",
+        price: Number(prod.price ?? 0),
+        imageUrl: prod.imageUrl ?? prod.image ?? "/images/placeholder.png",
+      };
+    }
+
+    // if prod is a raw id (string)
+    return {
+      _id: prod,
+      name: "Product (deleted or unavailable)",
+      price: 0,
+      imageUrl: "/images/placeholder.png",
+    };
+  };
 
   return (
     <div className="max-w-5xl mx-auto mt-8 px-4">
@@ -59,7 +88,9 @@ const Orders = () => {
                   </p>
                   <p className="text-sm text-gray-500">
                     Placed on:{" "}
-                    {new Date(order.createdAt).toLocaleDateString("en-IN")}
+                    {order.createdAt
+                      ? new Date(order.createdAt).toLocaleDateString("en-IN")
+                      : "—"}
                   </p>
                 </div>
                 <span
@@ -77,38 +108,65 @@ const Orders = () => {
 
               {/* Items */}
               <div className="space-y-3">
-                {order.orderItems.map((item) => (
-                  <div
-                    key={item._id}
-                    className="flex items-center gap-4 border-b pb-3 last:border-b-0 last:pb-0"
-                  >
-                    <img
-                      src={item.product.imageUrl}
-                      alt={item.product.name}
-                      className="w-16 h-16 rounded object-cover border"
-                    />
-                    <div className="flex-1">
-                      <p className="font-medium">{item.product.name}</p>
-                      <p className="text-sm text-gray-500">
-                        Qty: {item.quantity}
+                {order.orderItems.map((item, idx) => {
+                  // item.product can be populated object, raw id, or null
+                  const prod = normalizeProduct(item.product);
+                  const qty = Number(item.quantity ?? 1);
+                  const unitPrice = Number(item.priceAtTime ?? prod.price ?? 0);
+                  const lineTotal = (unitPrice * qty) || 0;
+
+                  // key: prefer item._id, then product id, then fallback to index
+                  const key =
+                    item._id ?? prod._id ?? `${order._id}-item-${idx}`;
+
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center gap-4 border-b pb-3 last:border-b-0 last:pb-0"
+                    >
+                      <img
+                        src={prod.imageUrl}
+                        alt={prod.name}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "/images/placeholder.png";
+                        }}
+                        className="w-16 h-16 rounded object-cover border"
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium">{prod.name}</p>
+                        {item.selectedSize && (
+                          <p className="text-xs text-gray-500">
+                            Size: {item.selectedSize}
+                          </p>
+                        )}
+                        {item.selectedColor && (
+                          <p className="text-xs text-gray-500">
+                            Color: {item.selectedColor}
+                          </p>
+                        )}
+                        <p className="text-sm text-gray-500">Qty: {qty}</p>
+                      </div>
+                      <p className="font-semibold text-gray-800">
+                        ₹{lineTotal.toFixed(2)}
                       </p>
                     </div>
-                    <p className="font-semibold text-gray-800">
-                      ₹{item.product.price * item.quantity}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Order Footer */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-4">
                 <div className="flex items-center gap-2 text-gray-600 text-sm">
                   <FaTruck className="text-gray-500" />
-                  <span>Shipping to: {order.shippingAddress.city}</span>
+                  <span>
+                    Shipping to:{" "}
+                    {order.shippingAddress?.city || "Address not available"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1 font-bold text-lg text-gray-800 mt-2 sm:mt-0">
                   <FaRupeeSign />
-                  {order.totalPrice}
+                  {Number(order.totalPrice ?? 0).toFixed(2)}
                 </div>
               </div>
             </div>

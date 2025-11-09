@@ -15,6 +15,27 @@ const orderItemSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const returnRequestSchema = new mongoose.Schema(
+  {
+    requestedAt: { type: Date, default: Date.now },
+    reason: { type: String, default: "Not specified" },
+    items: [
+      {
+        orderItemId: { type: mongoose.Schema.Types.ObjectId, ref: "OrderItem" },
+        qty: { type: Number, default: 1 },
+      },
+    ],
+    status: {
+      type: String,
+      enum: ["Requested", "Approved", "Denied", "Processed"],
+      default: "Requested",
+    },
+    adminNote: { type: String },
+    processedAt: { type: Date },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     user: {
@@ -22,6 +43,10 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
+    // Idempotency token (optional): used to prevent duplicate orders on retries
+    clientOrderRef: { type: String, index: true, sparse: true },
+
     orderItems: [orderItemSchema],
 
     shippingAddress: {
@@ -71,9 +96,15 @@ const orderSchema = new mongoose.Schema(
       shippedAt: { type: Date },
       deliveredAt: { type: Date },
     },
+
+    // Return request subdocument (optional)
+    returnRequest: returnRequestSchema,
   },
   { timestamps: true }
 );
+
+// Faster lookup by user
+orderSchema.index({ user: 1, createdAt: -1 });
 
 const Order = mongoose.model("Order", orderSchema);
 export default Order;

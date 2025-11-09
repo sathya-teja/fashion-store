@@ -23,6 +23,41 @@ async function calculateCartTotals(cart) {
 }
 
 /**
+ * Helper: sanitize cart after populate - remove items whose product no longer exists.
+ * Option: instead of removing you might mark them unavailable; here we remove orphaned items.
+ * If items were removed, totals are recalculated and cart saved.
+ */
+async function sanitizeCart(cart) {
+  if (!cart) return cart;
+  // If cart.items is not array, guard
+  if (!Array.isArray(cart.items)) {
+    cart.items = [];
+    await calculateCartTotals(cart);
+    await cart.save();
+    return cart;
+  }
+
+  const originalLen = cart.items.length;
+  // Filter items where product is present (not null/undefined)
+  cart.items = cart.items.filter((i) => i && i.product != null);
+
+  if (cart.items.length !== originalLen) {
+    // Recalculate totals and persist changes
+    await calculateCartTotals(cart);
+    await cart.save();
+  }
+  return cart;
+}
+
+/**
+ * Utility: populate items.product with required fields
+ */
+async function populateCartProducts(cart) {
+  if (!cart) return cart;
+  return await cart.populate("items.product", "name price discountPrice imageUrl sku");
+}
+
+/**
  * @desc    Get user cart
  * @route   GET /api/cart
  * @access  Private
@@ -33,9 +68,18 @@ router.get("/", protect, async (req, res) => {
       "items.product",
       "name price discountPrice imageUrl sku"
     );
+
     if (!cart) return res.json({ items: [] });
-    cart = await calculateCartTotals(cart);
+
+    // Remove orphaned items if any
+    cart = await sanitizeCart(cart);
+
+    await calculateCartTotals(cart);
     await cart.save();
+
+    // ensure population (in case sanitize changed items)
+    cart = await populateCartProducts(cart);
+
     res.json(cart);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -87,7 +131,13 @@ router.post("/", protect, async (req, res) => {
     await calculateCartTotals(cart);
     await cart.save();
 
-    res.json(await cart.populate("items.product", "name price discountPrice imageUrl sku"));
+    // populate, sanitize (in case product removed concurrently), recalc and save
+    cart = await populateCartProducts(cart);
+    cart = await sanitizeCart(cart);
+    await calculateCartTotals(cart);
+    await cart.save();
+
+    res.json(cart);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -109,7 +159,13 @@ router.put("/:itemId", protect, async (req, res) => {
       item.quantity = Number(quantity);
       await calculateCartTotals(cart);
       await cart.save();
-      return res.json(await cart.populate("items.product", "name price discountPrice imageUrl sku"));
+
+      let populated = await populateCartProducts(cart);
+      populated = await sanitizeCart(populated);
+      await calculateCartTotals(populated);
+      await populated.save();
+
+      return res.json(populated);
     }
 
     res.status(404).json({ message: "Item not found in cart" });
@@ -132,7 +188,12 @@ router.delete("/:itemId", protect, async (req, res) => {
     await calculateCartTotals(cart);
     await cart.save();
 
-    res.json(await cart.populate("items.product", "name price discountPrice imageUrl sku"));
+    let populated = await populateCartProducts(cart);
+    populated = await sanitizeCart(populated);
+    await calculateCartTotals(populated);
+    await populated.save();
+
+    res.json(populated);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -154,7 +215,12 @@ router.post("/apply-coupon", protect, async (req, res) => {
     await calculateCartTotals(cart);
     await cart.save();
 
-    res.json({ message: "Coupon applied", cart });
+    let populated = await populateCartProducts(cart);
+    populated = await sanitizeCart(populated);
+    await calculateCartTotals(populated);
+    await populated.save();
+
+    res.json({ message: "Coupon applied", cart: populated });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -174,7 +240,12 @@ router.post("/remove-coupon", protect, async (req, res) => {
     await calculateCartTotals(cart);
     await cart.save();
 
-    res.json({ message: "Coupon removed", cart });
+    let populated = await populateCartProducts(cart);
+    populated = await sanitizeCart(populated);
+    await calculateCartTotals(populated);
+    await populated.save();
+
+    res.json({ message: "Coupon removed", cart: populated });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -185,7 +256,6 @@ router.post("/remove-coupon", protect, async (req, res) => {
  * @route   DELETE /api/cart/clear
  * @access  Private
  */
-// ✅ Clear Cart
 router.delete("/clear", protect, async (req, res) => {
   try {
     let cart = await Cart.findOne({ user: req.user._id });
@@ -198,8 +268,15 @@ router.delete("/clear", protect, async (req, res) => {
       cart.total = 0;
     }
 
-    await cart.save(); // ✅ always save, even if new cart is created
-    res.json({ message: "Cart cleared", cart });
+    await cart.save();
+
+    // return sanitized/populated cart
+    let populated = await populateCartProducts(cart);
+    populated = await sanitizeCart(populated);
+    await calculateCartTotals(populated);
+    await populated.save();
+
+    res.json({ message: "Cart cleared", cart: populated });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

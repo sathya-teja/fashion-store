@@ -1,5 +1,6 @@
 import express from "express";
 import Order from "../models/Order.js";
+import Product from "../models/Product.js";
 import { protect, admin } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -11,33 +12,93 @@ const router = express.Router();
  */
 router.post("/", protect, async (req, res) => {
   try {
-    const { orderItems, shippingAddress, totalPrice, paymentInfo } = req.body;
+    const {
+      orderItems: incomingItems,
+      shippingAddress,
+      subtotal: clientSubtotal,
+      shippingPrice: clientShippingPrice,
+      taxPrice: clientTaxPrice,
+      discount: clientDiscount,
+      totalPrice: clientTotalPrice,
+      paymentInfo,
+      clientOrderRef,
+    } = req.body;
 
-    if (!orderItems || orderItems.length === 0) {
+    if (!incomingItems || incomingItems.length === 0) {
       return res.status(400).json({ message: "No order items" });
     }
 
+    // Idempotency: if clientOrderRef present, return existing order for this user
+    if (clientOrderRef) {
+      const existing = await Order.findOne({
+        clientOrderRef,
+        user: req.user._id,
+      });
+      if (existing) {
+        return res.status(200).json(existing);
+      }
+    }
+
+    // Server-side price verification: fetch product prices and compute subtotal
+    const orderItems = [];
+    let computedSubtotal = 0;
+
+    for (const item of incomingItems) {
+      const prodId = item.product;
+      const qty = Number(item.quantity) || 1;
+
+      const product = await Product.findById(prodId).select("price countInStock name");
+      if (!product) {
+        return res.status(404).json({ message: `Product not found: ${prodId}` });
+      }
+
+      const priceAtPurchase = product.price ?? 0;
+      const lineTotal = priceAtPurchase * qty;
+      computedSubtotal += lineTotal;
+
+      orderItems.push({
+        product: prodId,
+        quantity: qty,
+        selectedSize: item.selectedSize || item.selectedSize === "" ? item.selectedSize : "M",
+        selectedColor: item.selectedColor || item.selectedColor === "" ? item.selectedColor : "Default",
+        priceAtTime: priceAtPurchase,
+      });
+    }
+
+    // Decide shipping/tax/discount. Prefer client values if provided, else 0.
+    const shippingPrice = Number(clientShippingPrice) || 0;
+    const taxPrice = Number(clientTaxPrice) || 0;
+    const discount = Number(clientDiscount) || 0;
+
+    // Compute total server-side to avoid trusting clientTotalPrice
+    const computedTotal = Math.max(0, computedSubtotal + shippingPrice + taxPrice - discount);
+
+    // Determine order status using paymentInfo
+    let status = "Pending";
+    if (paymentInfo && paymentInfo.status && paymentInfo.status.toLowerCase() === "completed") {
+      status = "Processing";
+    }
+
+    // Build and save order
     const order = new Order({
       user: req.user._id,
-      orderItems: orderItems.map((item) => ({
-        product: item.product,
-        quantity: item.quantity,
-        selectedSize: item.selectedSize || "M",
-        selectedColor: item.selectedColor || "Default",
-        priceAtTime: item.priceAtPurchase || 0,
-      })),
+      clientOrderRef: clientOrderRef || undefined,
+      orderItems,
       shippingAddress,
-      subtotal: req.body.subtotal || 0,
-      shippingPrice: req.body.shippingPrice || 0,
-      taxPrice: req.body.taxPrice || 0,
-      discount: req.body.discount || 0,
-      totalPrice,
+      subtotal: computedSubtotal,
+      shippingPrice,
+      taxPrice,
+      discount,
+      totalPrice: computedTotal,
       paymentInfo: paymentInfo || { method: "Mock Payment", status: "Completed" },
+      status,
     });
 
     const createdOrder = await order.save();
+
     res.status(201).json(createdOrder);
   } catch (error) {
+    console.error("POST /api/orders error:", error);
     res.status(500).json({ message: error.message });
   }
 });
